@@ -1,4 +1,6 @@
 # @hazbase/auth
+[![npm version](https://badge.fury.io/js/@hazbase%2Fauth.svg)](https://badge.fury.io/js/@hazbase%2Fauth)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## Overview
 `@hazbase/auth` is an **SDK helper** that integrates with the hazBase backend to provide **wallet‑signature based authentication (JWT issuance)** and **ZK (Groth16) KYC/threshold proofs** using Poseidon commitments and Merkle membership proofs.  
