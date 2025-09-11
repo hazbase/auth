@@ -1,6 +1,6 @@
 {
   "name": "@hazbase/auth",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "description": "HAZAMA BASE • wallet‑signature authentication helper",
   "author": "IndieSquare Inc <info@hazbase.com>",
   "keywords": [],
