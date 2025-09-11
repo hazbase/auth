@@ -1,7 +1,7 @@
 # @hazbase/auth
 
 ## Overview
-`@hazbase/auth` is an **SDK helper** that integrates with the HAZAMA BASE backend to provide **wallet‑signature based authentication (JWT issuance)** and **ZK (Groth16) KYC/threshold proofs** using Poseidon commitments and Merkle membership proofs.  
+`@hazbase/auth` is an **SDK helper** that integrates with the hazBase backend to provide **wallet‑signature based authentication (JWT issuance)** and **ZK (Groth16) KYC/threshold proofs** using Poseidon commitments and Merkle membership proofs.  
 It targets **ESM** environments (`"type": "module"`) and is designed to work with `ethers` signers (`Signer` / `JsonRpcSigner`).
 
 **Highlights**
