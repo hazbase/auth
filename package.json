@@ -1,9 +1,19 @@
 {
   "name": "@hazbase/auth",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "An SDK helper that integrates with the hazBase backend to provide wallet‑signature based authentication (JWT issuance) and ZK (Groth16) KYC/threshold proofs using Poseidon commitments and Merkle membership proofs.",
   "author": "IndieSquare Inc <info@hazbase.com>",
-  "keywords": ["hazBase", "backend", "auth", "web3", "typescript", "blockchain", "dapps", "evm", "ethereum"],
+  "keywords": [
+    "hazBase",
+    "backend",
+    "auth",
+    "web3",
+    "typescript",
+    "blockchain",
+    "dapps",
+    "evm",
+    "ethereum"
+  ],
   "homepage": "https://lp.hazbase.com/",
   "repository": "hazbase/auth",
   "license": "Apache-2.0",
