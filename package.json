@@ -1,7 +1,7 @@
 {
   "name": "@hazbase/auth",
   "version": "0.0.12",
-  "description": "HAZAMA BASE • wallet‑signature authentication helper",
+  "description": "An SDK helper that integrates with the hazBase backend to provide wallet‑signature based authentication (JWT issuance) and ZK (Groth16) KYC/threshold proofs using Poseidon commitments and Merkle membership proofs.",
   "author": "IndieSquare Inc <info@hazbase.com>",
   "keywords": [],
   "license": "Apache-2.0",

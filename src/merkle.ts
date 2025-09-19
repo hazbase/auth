@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { ethers }   from "ethers";
+import { ethers, ZeroAddress }   from "ethers";
 import { buildPoseidon } from "circomlibjs";
 import { groth16, Groth16Proof, zKey } from "snarkjs";
 // @ts-ignore
@@ -30,8 +30,8 @@ export interface CorporateKYC {
 export type KYCInput = NaturalKYC | CorporateKYC;
 
 export interface ProofBundle {
-  proof: { a: string[], b: string[][], c: string[] };
-  publicSignals: bigint[];  // root, nullifier, leaf, addr
+  proof: { a: readonly [string, string], b: readonly [[string, string], [string, string]], c: readonly [string, string] };
+  publicSignals: readonly [bigint, bigint, bigint, bigint, bigint, bigint];  // [mode, root, nullifier, addr, threshold, leaf]
   input: Record<string, string | string[]>;
   /** The idNull used to create the nullifier */
   idNull: bigint;
@@ -144,9 +144,11 @@ export interface GenerateProofOpts {
   score?: bigint;          // ★ SCORE
   wasmPath? : string;      // compiled circuit.wasm
   zkeyPath? : string;      // final proving key
-  currentRoot?: bigint;   // root recorded on chain (0 = empty tree)
-  nextIndex?: number;     // leaf index to insert (default 0)
+  currentRoot?: bigint;    // root recorded on chain (0 = empty tree)
+  nextIndex?: number;      // leaf index to insert (default 0)
   idNull?: bigint;
+  chainId?: number;
+  verifierAddress?: string;
 }
 
 function pkgDir(): string {
@@ -174,13 +176,22 @@ export async function deriveIdNull(signer: ethers.Signer, opts?: any): Promise<b
 export async function genValues(n: bigint, opts?: GenerateProofOpts): Promise<any>{
   await PoseidonHelper.init();
   const rand      = opts?.idNull ?? PoseidonHelper.genSalt();
+
   const commitRaw = PoseidonHelper.H2(n, rand);
-  const commitVal = PoseidonHelper.F.toObject(commitRaw) as bigint;
+  const commitVal = PoseidonHelper.F.toObject(commitRaw).toString();
   return {
     value: Number(BigInt.asUintN(32, commitVal)),
     leafFull: commitVal
   }
 }
+
+const domainSeparator = (chainId: number, verifier: string) => {
+  // keccak256(abi.encode(chainid, address(this))) % field
+  const k = ethers.keccak256(
+    ethers.AbiCoder.defaultAbiCoder().encode(["uint256","address"], [chainId, verifier])
+  );
+  return PoseidonHelper.toF(k);
+};
 
 export async function generateProof(
   kyc: KYCInput,
@@ -229,14 +240,19 @@ export async function generateProof(
           salt
         ]);
 
+  if (!opts?.chainId) opts.chainId = 1;
+  if (!opts?.verifierAddress) opts.verifierAddress = ZeroAddress;
+
+  const domain = domainSeparator(opts.chainId, opts.verifierAddress);
   const commitLeaf = mode <= 0 ? basicLeaf : PoseidonHelper.H2(score, salt);
   /* ------------------------------------------------------------------ */
   /* 2. Compose Merkle leaf = Poseidon(commitLeaf, walletAddress)        */
   /* ------------------------------------------------------------------ */
-  const treeLeaf = PoseidonHelper.H2(
-    commitLeaf,
-    PoseidonHelper.toF(walletAddress)
-  );
+  const treeLeaf = PoseidonHelper._poseidon([ 
+    commitLeaf, 
+    PoseidonHelper.toF(walletAddress), 
+    domain 
+  ]) as bigint;
 
   /* ------------------------------------------------------------------ */
   /* 3. Insert the leaf into an off-chain Merkle tree                   */
@@ -273,6 +289,7 @@ export async function generateProof(
     pathPos   : pathPos.map(String),
     score     : score.toString(),
     rand      : salt.toString(),
+    domain    : domain.toString(),
   } as Record<string,string|string[]>;
 
   /* ------------------------------------------------------------------ */
@@ -295,16 +312,16 @@ export async function generateProof(
   /* ------------------------------------------------------------------ */
   /* 8. Re-format proof for Solidity verifier                           */
   /* ------------------------------------------------------------------ */
-  const a = [proof.pi_a[0], proof.pi_a[1]];
-  const b = [
+  const a: readonly [string, string] = [proof.pi_a[0].toString(), proof.pi_a[1]];
+  const b: readonly [[string, string], [string, string]] = [
     [proof.pi_b[0][1], proof.pi_b[0][0]],
     [proof.pi_b[1][1], proof.pi_b[1][0]]
   ];
-  const c = [proof.pi_c[0], proof.pi_c[1]];
-
+  const c: readonly [string, string] = [proof.pi_c[0], proof.pi_c[1]];
+  const pubsigs: any = publicSignals.map(BigInt);
   return {
     proof: { a, b, c },
-    publicSignals: publicSignals.map(BigInt),
+    publicSignals: pubsigs,
     input,
     idNull: salt
   };
