@@ -290,31 +290,32 @@ function qualify_input_list(prefix,input,input1){
 }
 
 function qualify_input(prefix,input,input1) {
+	let a;
     if (Array.isArray(input)) {
-	a = flatArray(input);
-	if (a.length > 0) {
-	    let t = typeof a[0];
-	    for (let i = 1; i<a.length; i++) {
-		if (typeof a[i] != t){
-		    throw new Error(`Types are not the same in the key ${prefix}`);
+		a = flatArray(input);
+		if (a.length > 0) {
+			let t = typeof a[0];
+			for (let i = 1; i<a.length; i++) {
+			if (typeof a[i] != t){
+				throw new Error(`Types are not the same in the key ${prefix}`);
+			}
+			}
+			if (t == "object") {
+			qualify_input_list(prefix,input,input1);
+			} else {
+			input1[prefix] = input;
+			}
+		} else {	    
+			input1[prefix] = input;
 		}
-	    }
-	    if (t == "object") {
-		qualify_input_list(prefix,input,input1);
-	    } else {
-		input1[prefix] = input;
-	    }
-	} else {	    
-	    input1[prefix] = input;
-	}
     } else if (typeof input == "object") {
         const keys = Object.keys(input);
-	keys.forEach( (k) => {
-	    let new_prefix = prefix == ""? k : prefix + "." + k;
-	    qualify_input(new_prefix,input[k],input1);
-	});
+		keys.forEach( (k) => {
+			let new_prefix = prefix == ""? k : prefix + "." + k;
+			qualify_input(new_prefix,input[k],input1);
+		});
     } else {
-	input1[prefix] = input;
+		input1[prefix] = input;
     }
 }
 
