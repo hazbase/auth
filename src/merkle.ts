@@ -136,7 +136,7 @@ class IncrementalTree {
 /* ──────────────────────────────────────────────────────────── */
 /*                   High‑level proof generator                 */
 /* ──────────────────────────────────────────────────────────── */
-type ProofMode = "LTE" | "GTE" | "EQ";
+type ProofMode = "NONE" | "GT" | "LT" | "NEQ" | "EQ" | "GTE" | "LTE" | number;
 
 export interface GenerateProofOpts {
   mode?: ProofMode;        // ★ default "KYC"
@@ -200,10 +200,15 @@ export async function generateProof(
 ): Promise<ProofBundle> {
   await PoseidonHelper.init();
 
-  const mode = opts.mode === "GTE" ? 1
-            : opts.mode === "LTE" ? 2
-            : opts.mode === "EQ"  ? 3
-            : 0;
+  const mode = opts.mode === "NONE"? 0
+            : opts.mode  === "GT"  ? 1
+            : opts.mode  === "LT"  ? 2
+            : opts.mode  === "NEQ" ? 3
+            : opts.mode  === "EQ"  ? 4
+            : opts.mode  === "GTE" ? 5
+            : opts.mode  === "LTE" ? 6
+            : typeof opts.mode === 'number'? opts.mode : 0;
+
   const threshold = mode > 0 ? (opts.threshold ?? 0n) : 0n;
   const score     = mode > 0 ? (opts.score     ?? 0n) : 0n;
 
