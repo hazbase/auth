@@ -95,6 +95,11 @@ Set the **client key** issued by HAZAMA BASE. Required for server checks and log
 
 ---
 
+## ⚠️ Deprecation
+
+> ZK features have moved to @hazbase/zk.
+> ZK helpers in @hazbase/auth are deprecated and will be removed in the next major. New and existing implementations should import from @hazbase/zk.
+
 ### `deriveIdNull(signer, opts?) => Promise<bigint>`
 Derives a per‑user **nullifier** using an EIP‑191 personal signature (`\x19Ethereum Signed Message:`). Default domain message: **`"Hazbase KYC — Generate idNull v1"`**.
 
