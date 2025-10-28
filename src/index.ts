@@ -8,4 +8,3 @@ export {
   setApiEndpoint,
   getApiEndpoint
 } from './config';
-export * from './merkle';

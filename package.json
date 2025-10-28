@@ -28,9 +28,7 @@
   },
   "sideEffects": false,
   "dependencies": {
-    "circomlibjs": "^0.1.7",
-    "ethers": "^6.12.1",
-    "snarkjs": "^0.7.5"
+    "ethers": "^6.12.1"
   },
   "scripts": {
     "build": "tsup",
@@ -49,7 +47,6 @@
   },
   "files": [
     "dist",
-    "assets",
     "README.md",
     "LICENSE"
   ]
