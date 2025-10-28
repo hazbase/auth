@@ -8,9 +8,6 @@ It targets **ESM** environments (`"type": "module"`) and is designed to work wit
 
 **Highlights**
 - `signInWithWallet` — Sign a nonce with a wallet and obtain a **JWT accessToken**.
-- `generateProof` — Build **Poseidon commitments**, Merkle inclusion, and a **Groth16 proof** (KYC or threshold mode).
-- `deriveIdNull` — Derive a per‑user **nullifier** via wallet signature.
-- `genValues` — Helper for threshold commitment values.
 
 > Intent: In line with the whitepaper’s principles (multi‑layer governance, staged recovery, circuit breakers), this SDK enables **secure authentication with minimal attribute disclosure** while standardizing **audit logs** (request transactions).
 
@@ -98,110 +95,13 @@ Set the **client key** issued by HAZAMA BASE. Required for server checks and log
 ## ⚠️ Deprecation
 
 > ZK features have moved to @hazbase/zk.
-> ZK helpers in @hazbase/auth are deprecated and will be removed in the next major. New and existing implementations should import from @hazbase/zk.
-
-### `deriveIdNull(signer, opts?) => Promise<bigint>`
-Derives a per‑user **nullifier** using an EIP‑191 personal signature (`\x19Ethereum Signed Message:`). Default domain message: **`"Hazbase KYC — Generate idNull v1"`**.
-
-**Params (excerpt)**
-- `signer: ethers.Signer`
-- `opts.message?: string` — Optional additional message content
-
-**Returns**
-- `bigint` — user‑scoped nullifier value
-
----
-
-### `generateProof(kyc, walletAddress, opts) => Promise<ProofBundle>`
-Generates a **Groth16 proof** from **KYC inputs** and a **wallet address**, optionally in **threshold mode** (`GTE`, `LTE`, `EQ`). Uses **Poseidon** hashing and an **off‑chain Merkle tree**.
-
-**Types (excerpt)**
-```ts
-// Natural person
-export interface NaturalKYC {
-  govId: string;
-  name: string;
-  dobYMD: number;         // e.g., 19991231
-  country: number;        // ISO numeric or org-specific
-  salt?: bigint;
-}
-
-// Corporation
-export interface CorporateKYC {
-  corpId: string;
-  name: string;
-  incDateYMD: number;     // YYYYMMDD
-  country: number;
-  role?: string;
-  salt?: bigint;
-}
-
-type ProofMode = 'GTE' | 'LTE' | 'EQ';
-
-export interface GenerateProofOpts {
-  mode?: ProofMode;       // default: plain KYC (no threshold)
-  threshold?: bigint;     // threshold SCORE
-  score?: bigint;         // computed SCORE
-  wasmPath?: string;      // circuit.wasm location
-  zkeyPath?: string;      // final proving key
-  currentRoot?: bigint;   // current Merkle root (0 = empty tree)
-  nextIndex?: number;     // leaf index to insert (default 0)
-  idNull?: bigint;        // override salt/nullifier
-}
-
-export interface ProofBundle {
-  proof: { a: string[]; b: string[][]; c: string[] }; // Groth16 proof
-  publicSignals: bigint[];
-  input: Record<string, any>;
-  idNull: bigint;    // salt used for commitment/nullifier
-}
-```
-
-**Process (conceptual)**
-1. Build a **KYC leaf**  
-   - Natural: `Poseidon(H2(H2(govIdHash, nameHash), dobYMD), country, salt)` (simplified)  
-   - Corporate: `Poseidon(H2(corpIdHash, nameHash), incDateYMD, country, role?, salt)`  
-   - Threshold mode: `commitLeaf = H2(score, salt)`
-2. **treeLeaf** = `Poseidon(commitLeaf, walletAddress)`
-3. Insert into a **Merkle tree** (`currentRoot`/`nextIndex`)
-4. Compute **nullifier** = `H2(salt, root)`
-5. Load `*.wasm` / `*.zkey` → build witness → **groth16.prove** → return `ProofBundle`
-
-**Example**
-```ts
-import { generateProof, deriveIdNull } from '@hazbase/auth';
-
-const idNull = await deriveIdNull(signer);
-
-const proof = await generateProof(
-  { govId: 'ID-123', name: 'Alice', dobYMD: 19900101, country: 392 }, // NaturalKYC
-  '0xYourWallet',
-  {
-    mode: 'GTE',
-    threshold: 700n,
-    score: 710n,
-    wasmPath: '/circuits/kyc.wasm',
-    zkeyPath: '/circuits/kyc_final.zkey',
-    currentRoot: 0n,
-    nextIndex: 0,
-    idNull
-  }
-);
-
-// Send proof.proof / proof.publicSignals to a verifier contract or API
-```
-
----
-
-### `genValues(n, opts?) => Promise<{ value: number; leafFull: bigint }>`
-Returns both a **public 32‑bit value** and a **full field value** for a threshold commitment `H2(n, rand)`. Fix `rand` with `opts.idNull` to make it deterministic.
+> ZK helpers in @hazbase/auth are deprecated and removed. New and existing implementations should import from @hazbase/zk.
 
 ---
 
 ## Best practices
 - **Initialize keys early**: call `setClientKey()` during app startup.
 - **Domain separation**: use a clear `buildMessage` with a nonce to resist phishing.
-- **Circuit & key management**: verify hashes of `*.wasm`/`*.zkey`, and distribute them securely.
 
 ---
 
@@ -210,7 +110,6 @@ Returns both a **public 32‑bit value** and a **full field value** for a thresh
 - **`Client-key validation failed` / `inactive`** — check `functionId` / `clientKey`, and the correct environment.
 - **`Nonce request failed`** — ensure reachability/CORS/headers for `/api/app/user/nonce`.
 - **`Missing accessToken`** — server‑side signature verification failed; verify `walletAddress` & signature.
-- **ZK proof build fails** — check `wasmPath`/`zkeyPath`, circuit compatibility, and `bigint` inputs.
 
 ---
 
@@ -218,8 +117,7 @@ Returns both a **public 32‑bit value** and a **full field value** for a thresh
 ```ts
 import { 
   setClientKey,
-  signInWithWallet,
-  generateProof, deriveIdNull, genValues
+  signInWithWallet
 } from '@hazbase/auth';
 ```
 
