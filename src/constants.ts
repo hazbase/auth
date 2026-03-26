@@ -1,2 +1,2 @@
-/** HAZAMA BASE production API */
-export const API_ENDPOINT = 'https://prd-hazbase-api.an.r.appspot.com';
+/** hazBase default auth API */
+export const API_ENDPOINT = 'https://passkey.hazbase.com';

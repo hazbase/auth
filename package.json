@@ -1,7 +1,7 @@
 {
   "name": "@hazbase/auth",
   "version": "0.1.1",
-  "description": "An SDK helper that integrates with the hazBase backend to provide wallet‑signature based authentication (JWT issuance) and ZK (Groth16) KYC/threshold proofs using Poseidon commitments and Merkle membership proofs.",
+  "description": "SDK helper for email OTP sessions, passkey-native account bootstrap, sponsor signing, wallet-signature authentication, and hazBase-integrated ZK proofs.",
   "author": "IndieSquare Inc <info@hazbase.com>",
   "keywords": [
     "hazBase",
@@ -22,6 +22,7 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "require": "./dist/index.js",
       "import": "./dist/index.mjs"
     }

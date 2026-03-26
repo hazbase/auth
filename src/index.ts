@@ -6,5 +6,5 @@ export {
   ensureClientKeyActive,
   createRequestTransaction,
   setApiEndpoint,
-  getApiEndpoint
+  getApiEndpoint,
 } from './config';
