@@ -10,6 +10,9 @@ import type {
   EmailOtpSessionResult,
   EmbeddedSessionGrantResult,
   EndEmbeddedSessionRequest,
+  ExecuteEmbeddedSessionRequest,
+  ExecuteEmbeddedSessionResult,
+  GrantEmbeddedSessionRequest,
   ListEmbeddedSessionsRequest,
   ListEmbeddedSessionsResult,
   ListPasskeyDevicesRequest,
@@ -236,18 +239,21 @@ export async function requestPasskeyAccountDescriptor({
   deviceBindingId,
   accountSalt,
   chainId,
+  accountVariant,
   endpoint = '/api/auth/account/descriptor',
 }: {
   emailSession: string;
   deviceBindingId: string;
   accountSalt?: string;
   chainId?: number;
+  accountVariant?: string;
   endpoint?: string;
 }): Promise<PasskeyAccountDescriptorResult> {
   return postJson<PasskeyAccountDescriptorResult>(endpoint, {
     deviceBindingId,
     ...(accountSalt ? { accountSalt } : {}),
     ...(chainId != null ? { chainId } : {}),
+    ...(accountVariant ? { accountVariant } : {}),
   }, authHeader(emailSession));
 }
 
@@ -257,6 +263,7 @@ export async function bootstrapPasskeyAccount({
   highTrustToken,
   accountSalt,
   chainId,
+  accountVariant,
   metadata,
   endpoint = '/api/auth/account/bootstrap',
 }: BootstrapPasskeyAccountRequest & { endpoint?: string }): Promise<BootstrapPasskeyAccountResult> {
@@ -265,6 +272,7 @@ export async function bootstrapPasskeyAccount({
     highTrustToken,
     ...(accountSalt ? { accountSalt } : {}),
     ...(chainId != null ? { chainId } : {}),
+    ...(accountVariant ? { accountVariant } : {}),
     ...(metadata ? { metadata } : {}),
   }, authHeader(emailSession));
 }
@@ -325,6 +333,46 @@ export async function endEmbeddedSession({
   endpoint = '/api/wallet/session/end',
 }: EndEmbeddedSessionRequest & { endpoint?: string }): Promise<void> {
   await postJson(endpoint, { embeddedSessionId }, authHeader(emailSession));
+}
+
+export async function grantEmbeddedSession({
+  emailSession,
+  embeddedSessionId,
+  smartAccountAddress,
+  deviceBindingId,
+  highTrustToken,
+  endpoint = '/api/wallet/session/grant',
+}: GrantEmbeddedSessionRequest & { endpoint?: string }): Promise<EmbeddedSessionGrantResult> {
+  return postJson<EmbeddedSessionGrantResult>(endpoint, {
+    embeddedSessionId,
+    smartAccountAddress,
+    deviceBindingId,
+    highTrustToken,
+  }, authHeader(emailSession));
+}
+
+export async function executeEmbeddedSession({
+  emailSession,
+  embeddedSessionId,
+  userOp,
+  target,
+  data,
+  value,
+  paymasterValiditySec,
+  metadata,
+  waitForReceipt,
+  endpoint = '/api/wallet/session/execute',
+}: ExecuteEmbeddedSessionRequest & { endpoint?: string }): Promise<ExecuteEmbeddedSessionResult> {
+  return postJson<ExecuteEmbeddedSessionResult>(endpoint, {
+    embeddedSessionId,
+    userOp,
+    target,
+    data,
+    ...(value != null ? { value } : {}),
+    ...(paymasterValiditySec != null ? { paymasterValiditySec } : {}),
+    ...(metadata ? { metadata } : {}),
+    ...(waitForReceipt != null ? { waitForReceipt } : {}),
+  }, authHeader(emailSession));
 }
 
 export async function listPasskeyDevices({

@@ -20,6 +20,8 @@ export interface EmailOtpSessionResult {
   userId?: string;
   ownerBootstrapRequired?: boolean;
   smartAccountAddress?: string;
+  accountVariant?: string;
+  relayMode?: string;
 }
 
 export type PasskeyAssertionPurpose = 'bootstrap' | 'migration' | 'reauth' | 'session';
@@ -113,6 +115,8 @@ export interface PasskeyAccountDescriptorResult {
   ownerConfigHash: string;
   predictedAccountAddress: string;
   accountSalt: string;
+  accountVariant?: string;
+  relayMode?: string;
   credentialId?: string;
   deviceBindingId?: string;
   status?: string;
@@ -124,6 +128,7 @@ export interface BootstrapPasskeyAccountRequest {
   highTrustToken: string;
   accountSalt?: string;
   chainId?: number;
+  accountVariant?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -142,6 +147,8 @@ export interface LookupPasskeyAccountResult {
   smartAccountAddress?: string;
   ownerValidator?: string;
   ownerConfigHash?: string;
+  accountVariant?: string;
+  relayMode?: string;
   accountSalt?: string;
   chainId?: number;
   primaryDeviceBindingId?: string;
@@ -163,6 +170,8 @@ export interface OwnerUserOpAuthorizationRequest {
 export interface OwnerUserOpAuthorizationResult {
   ownerValidator: string;
   ownerConfigHash: string;
+  accountVariant?: string;
+  relayMode?: string;
   validAfter: number;
   validUntil: number;
   signatureType: number;
@@ -189,6 +198,71 @@ export interface EmbeddedSessionGrantResult {
   profileKey?: string;
   gasBudgetInitial?: string;
   gasBudgetRemaining?: string;
+  accountVariant?: string;
+  grantStatus?: string;
+  grantTxHash?: string;
+  revokeTxHash?: string;
+  revokeStatus?: string;
+  sessionVersion?: number;
+  grantedTargets?: string[];
+  grantedSelectors?: Record<string, string[]>;
+  relayMode?: string;
+  submittedUserOpHash?: string | null;
+  receipt?: Record<string, unknown> | null;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export interface GrantEmbeddedSessionRequest {
+  emailSession: string;
+  embeddedSessionId: string;
+  smartAccountAddress: string;
+  deviceBindingId: string;
+  highTrustToken: string;
+}
+
+export interface ExecuteEmbeddedSessionUserOp {
+  sender: string;
+  nonce: string;
+  initCode?: string;
+  callData: string;
+  callGasLimit: string;
+  verificationGasLimit: string;
+  preVerificationGas?: string;
+  maxFeePerGas?: string;
+  maxPriorityFeePerGas?: string;
+}
+
+export interface ExecuteEmbeddedSessionRequest {
+  emailSession: string;
+  embeddedSessionId: string;
+  userOp: ExecuteEmbeddedSessionUserOp;
+  target: string;
+  data: string;
+  value?: string;
+  paymasterValiditySec?: string;
+  metadata?: Record<string, unknown>;
+  waitForReceipt?: boolean;
+}
+
+export interface ExecuteEmbeddedSessionResult {
+  accountVariant?: string;
+  relayMode?: string;
+  bundlerRpcUrl?: string;
+  rpcUrl?: string;
+  smartAccountAddress?: string;
+  relayerAddress?: string;
+  beneficiary?: string;
+  nonce?: string;
+  initCode?: string;
+  target?: string;
+  data?: string;
+  value?: string;
+  localUserOpHash?: string;
+  submittedUserOpHash?: string | null;
+  transactionHash?: string;
+  receipt?: Record<string, unknown> | null;
+  sponsor?: SponsorUserOpResult;
   status?: string;
   [key: string]: unknown;
 }
@@ -238,6 +312,13 @@ export interface EmbeddedSessionRecord {
   validUntil?: string;
   gasBudgetRemaining?: string;
   createdAt?: string;
+  accountVariant?: string;
+  grantStatus?: string;
+  grantTxHash?: string | null;
+  sessionVersion?: number;
+  relayMode?: string | null;
+  lastExecutionTxHash?: string | null;
+  lastExecutionAt?: string | null;
 }
 
 export interface ListEmbeddedSessionsRequest {
@@ -257,6 +338,11 @@ export interface RevokeEmbeddedSessionRequest {
 
 export interface RevokeEmbeddedSessionResult {
   embeddedSessionId: string;
+  accountVariant?: string;
+  relayMode?: string;
+  revokeTxHash?: string | null;
+  submittedUserOpHash?: string | null;
+  revokeStatus?: string;
   status?: string;
 }
 

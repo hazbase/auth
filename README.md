@@ -56,6 +56,10 @@ Default route family:
 - `/api/auth/account/sessions`
 - `/api/auth/account/revoke-device`
 - `/api/auth/account/revoke-session`
+- `/api/wallet/session/start`
+- `/api/wallet/session/grant`
+- `/api/wallet/session/execute`
+- `/api/wallet/session/end`
 - `/api/wallet/sponsor-action`
 
 Important model assumptions:
@@ -67,6 +71,7 @@ Important model assumptions:
 - Device revoke cascades to active embedded sessions on that device.
 - `sponsorUserOp` only succeeds for actions that match the embedded-session snapshot and on-chain session policy.
 - Session-mode sponsorship returns an `accountSignature` only for the exact sponsored payload it just approved.
+- Embedded-session execution can be driven either as a sponsor-only flow or as a backend-executed session flow with `grantEmbeddedSession()` and `executeEmbeddedSession()`.
 
 Deployment portability notes:
 - `@hazbase/auth` stays backend-contract based. It does not expose cloud-specific SDK modes.
