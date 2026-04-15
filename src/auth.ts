@@ -17,6 +17,7 @@ import type {
   ListEmbeddedSessionsResult,
   ListPasskeyDevicesRequest,
   ListPasskeyDevicesResult,
+  SupportedChainsResult,
   LookupPasskeyAccountRequest,
   LookupPasskeyAccountResult,
   OwnerUserOpAuthorizationRequest,
@@ -67,6 +68,20 @@ async function postJson<T>(path: string, body: Record<string, unknown>, headers:
 
   return readData<T>(res);
 }
+
+async function getJson<T>(path: string, headers: Record<string, string> = {}): Promise<T> {
+  const res = await fetch(`${getApiEndpoint()}${path}`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => '');
+    throw new Error(`${path} failed: ${err || res.statusText}`);
+  }
+
+  return readData<T>(res);
+}
 function authHeader(emailSession: string): Record<string, string> {
   return { Authorization: `Bearer ${emailSession}` };
 }
@@ -90,13 +105,21 @@ async function auditIfEnabled(params: {
 }
 
 async function fetchNonce(walletAddress: string): Promise<string> {
-  const res = await fetch(`${getApiEndpoint()}/api/app/user/nonce?walletAddress=${walletAddress}`);
+  const res = await fetch(`${getApiEndpoint()}/api/app/user/nonce?walletAddress=${encodeURIComponent(walletAddress)}`);
   if (!res.ok) {
     const err = await res.text().catch(() => '');
     throw new Error(`Nonce request failed: ${err || res.statusText}`);
   }
   const { nonce } = await readData<{ nonce: string }>(res);
   return nonce;
+}
+
+export async function listSupportedChains({
+  endpoint = '/api/meta/chains',
+}: {
+  endpoint?: string;
+} = {}): Promise<SupportedChainsResult> {
+  return getJson<SupportedChainsResult>(endpoint);
 }
 
 export async function signInWithWallet(
@@ -281,11 +304,13 @@ export async function lookupPasskeyAccount({
   emailSession,
   deviceBindingId,
   smartAccountAddress,
+  chainId,
   endpoint = '/api/auth/account/lookup',
 }: LookupPasskeyAccountRequest & { endpoint?: string }): Promise<LookupPasskeyAccountResult> {
   return postJson<LookupPasskeyAccountResult>(endpoint, {
     ...(deviceBindingId ? { deviceBindingId } : {}),
     ...(smartAccountAddress ? { smartAccountAddress } : {}),
+    ...(chainId != null ? { chainId } : {}),
   }, authHeader(emailSession));
 }
 
@@ -294,6 +319,7 @@ export async function authorizeOwnerUserOp({
   deviceBindingId,
   highTrustToken,
   smartAccountAddress,
+  chainId,
   userOpHash,
   validForSec,
   endpoint = '/api/auth/account/authorize-userop',
@@ -302,6 +328,7 @@ export async function authorizeOwnerUserOp({
     deviceBindingId,
     highTrustToken,
     smartAccountAddress,
+    ...(chainId != null ? { chainId } : {}),
     userOpHash,
     ...(validForSec != null ? { validForSec } : {}),
   }, authHeader(emailSession));
@@ -310,6 +337,7 @@ export async function authorizeOwnerUserOp({
 export async function startEmbeddedSession({
   emailSession,
   smartAccountAddress,
+  chainId,
   deviceBindingId,
   actionProfileKey,
   highTrustToken,
@@ -319,6 +347,7 @@ export async function startEmbeddedSession({
 }: StartEmbeddedSessionRequest & { endpoint?: string }): Promise<EmbeddedSessionGrantResult> {
   return postJson<EmbeddedSessionGrantResult>(endpoint, {
     smartAccountAddress,
+    ...(chainId != null ? { chainId } : {}),
     deviceBindingId,
     actionProfileKey,
     highTrustToken,

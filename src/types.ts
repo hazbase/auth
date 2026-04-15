@@ -3,6 +3,41 @@ export interface SignInResult {
   accessToken: string;
 }
 
+export interface SupportedChainSummary {
+  chainId: number;
+  key: string;
+  name: string;
+  kind: 'testnet' | 'mainnet';
+  rpcUrl: string;
+  bundlerRpcUrl?: string | null;
+  entryPointAddress: string;
+  paymasterAddress?: string | null;
+  defaultAccountVariant?: string;
+  defaultProfileKey?: string | null;
+  blockExplorerUrl?: string | null;
+  capabilities?: {
+    owner: boolean;
+    session: boolean;
+    sponsor: boolean;
+    firstPartyProfiles: boolean;
+  };
+}
+
+export interface SupportedChainsResult {
+  defaultChainId: number;
+  chains: SupportedChainSummary[];
+  status?: string;
+}
+
+export interface EmailOtpAccountSummary {
+  smartAccountAddress: string;
+  chainId: number;
+  accountVariant?: string;
+  relayMode?: string;
+  primaryDeviceBindingId?: string;
+  updatedAt?: string;
+}
+
 export interface EmailOtpRequestResult {
   email: string;
   challengeId?: string;
@@ -22,6 +57,7 @@ export interface EmailOtpSessionResult {
   smartAccountAddress?: string;
   accountVariant?: string;
   relayMode?: string;
+  accounts?: EmailOtpAccountSummary[];
 }
 
 export type PasskeyAssertionPurpose = 'bootstrap' | 'migration' | 'reauth' | 'session';
@@ -141,6 +177,7 @@ export interface LookupPasskeyAccountRequest {
   emailSession: string;
   deviceBindingId?: string;
   smartAccountAddress?: string;
+  chainId?: number;
 }
 
 export interface LookupPasskeyAccountResult {
@@ -163,6 +200,7 @@ export interface OwnerUserOpAuthorizationRequest {
   deviceBindingId: string;
   highTrustToken: string;
   smartAccountAddress: string;
+  chainId?: number;
   userOpHash: string;
   validForSec?: number;
 }
@@ -183,6 +221,7 @@ export interface OwnerUserOpAuthorizationResult {
 export interface StartEmbeddedSessionRequest {
   emailSession: string;
   smartAccountAddress: string;
+  chainId?: number;
   deviceBindingId: string;
   actionProfileKey: string;
   highTrustToken: string;
@@ -192,6 +231,7 @@ export interface StartEmbeddedSessionRequest {
 
 export interface EmbeddedSessionGrantResult {
   sessionId?: string;
+  chainId?: number;
   sessionKeyAddress?: string;
   validUntil?: string | number;
   level?: number | string;
@@ -246,6 +286,7 @@ export interface ExecuteEmbeddedSessionRequest {
 }
 
 export interface ExecuteEmbeddedSessionResult {
+  chainId?: number;
   accountVariant?: string;
   relayMode?: string;
   bundlerRpcUrl?: string;
@@ -306,6 +347,7 @@ export interface RevokePasskeyDeviceResult {
 export interface EmbeddedSessionRecord {
   embeddedSessionId: string;
   smartAccountAddress: string;
+  chainId?: number;
   deviceBindingId: string;
   actionProfileKey: string;
   sessionKeyAddress?: string;
@@ -338,6 +380,7 @@ export interface RevokeEmbeddedSessionRequest {
 
 export interface RevokeEmbeddedSessionResult {
   embeddedSessionId: string;
+  chainId?: number;
   accountVariant?: string;
   relayMode?: string;
   revokeTxHash?: string | null;
@@ -373,6 +416,7 @@ export interface SponsorUserOpResult {
   approved: boolean;
   expiresAt: string;
   profileKey: string;
+  chainId?: number | null;
   paymasterAndData: string;
   validAfter: number;
   validUntil: number;
