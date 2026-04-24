@@ -63,6 +63,12 @@ export interface EmailOtpSessionResult {
 export type PasskeyAssertionPurpose = 'bootstrap' | 'migration' | 'reauth' | 'session';
 export type PasskeyAlgorithm = 'ES256' | 'RS256';
 
+export interface PasskeyPartnerOriginOptions {
+  origin: string;
+  rpId?: string;
+  clientKey?: string;
+}
+
 export interface PasskeyRegistrationChallengeResult {
   challengeId: string;
   challenge: string;
@@ -425,5 +431,119 @@ export interface SponsorUserOpResult {
   sessionKeyAddress?: string;
   accountSignature?: string;
   signingMode?: SessionSigningMode;
+  status?: string;
+}
+export interface PaymentNetworkSummary {
+  network: string;
+  name: string;
+  chainId: number;
+  kind: 'testnet' | 'mainnet';
+  asset: string;
+  assetAddress: string;
+  decimals: number;
+  eip712?: {
+    name: string;
+    version: string;
+  };
+  hazbaseWalletPayoutAvailable?: boolean;
+  capabilities?: {
+    owner: boolean;
+    session: boolean;
+    sponsor: boolean;
+    firstPartyProfiles: boolean;
+  };
+}
+
+export interface SupportedPaymentsResult {
+  defaultNetwork: string;
+  networks: PaymentNetworkSummary[];
+  status?: string;
+}
+
+export type PaymentPayoutMethod =
+  | {
+      kind: 'external_eoa';
+      address: string;
+    }
+  | {
+      kind: 'hazbase_wallet';
+      address?: never;
+    };
+
+export interface X402Requirement {
+  scheme: string;
+  network: string;
+  maxAmountRequired: string;
+  resource: string;
+  description?: string;
+  mimeType?: string;
+  payTo: string;
+  maxTimeoutSeconds?: number;
+  asset: string;
+  extra?: Record<string, unknown>;
+}
+
+export interface X402ResponseBody {
+  x402Version: number;
+  accepts: X402Requirement[];
+  error: string;
+}
+
+export interface X402RequirementsRequest {
+  emailSession?: string;
+  resourceId: string;
+  resourceUrl: string;
+  description?: string;
+  mimeType?: string;
+  network: string;
+  asset: string;
+  priceAtomic: string;
+  payoutMethod: PaymentPayoutMethod;
+  metadata?: Record<string, unknown>;
+}
+
+export interface X402RequirementsResult {
+  paymentRequestId: string;
+  chainId: number;
+  network: string;
+  asset: string;
+  payoutAddress: string;
+  payoutKind: string;
+  payoutOriginKind?: string;
+  x402: X402ResponseBody;
+  status?: string;
+}
+
+export interface X402VerifyRequest {
+  paymentRequestId: string;
+  xPayment: string;
+}
+
+export interface X402VerifyResult {
+  paymentRequestId: string;
+  verified: boolean;
+  invalidReason?: string;
+  errorCode?: string;
+  payer?: string | null;
+  network?: string;
+  facilitator?: Record<string, unknown>;
+  responsePreview?: {
+    headers?: Record<string, string>;
+    body?: Record<string, unknown>;
+  };
+  status?: string;
+}
+
+export interface X402SettleRequest {
+  paymentRequestId: string;
+  xPayment: string;
+}
+
+export interface X402SettleResult {
+  paymentRequestId: string;
+  settled: boolean;
+  errorCode?: string;
+  transactionHash?: string | null;
+  facilitator?: Record<string, unknown>;
   status?: string;
 }

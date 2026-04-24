@@ -26,6 +26,7 @@ import type {
   PasskeyAssertionPurpose,
   PasskeyAccountDescriptorResult,
   PasskeyRegistrationChallengeResult,
+  PasskeyPartnerOriginOptions,
   RevokeEmbeddedSessionRequest,
   RevokeEmbeddedSessionResult,
   RevokePasskeyDeviceRequest,
@@ -193,16 +194,21 @@ export async function requestPasskeyRegistrationChallenge({
   emailSession,
   deviceId,
   deviceLabel,
+  partnerOrigin,
   endpoint = '/api/auth/passkey/register/challenge',
 }: {
   emailSession: string;
   deviceId?: string;
   deviceLabel?: string;
+  partnerOrigin?: PasskeyPartnerOriginOptions;
   endpoint?: string;
 }): Promise<PasskeyRegistrationChallengeResult> {
   return postJson<PasskeyRegistrationChallengeResult>(endpoint, {
     ...(deviceId ? { deviceId } : {}),
     ...(deviceLabel ? { deviceLabel } : {}),
+    ...(partnerOrigin?.origin ? { origin: partnerOrigin.origin } : {}),
+    ...(partnerOrigin?.rpId ? { rpId: partnerOrigin.rpId } : {}),
+    ...(partnerOrigin?.clientKey ? { clientKey: partnerOrigin.clientKey } : {}),
   }, authHeader(emailSession));
 }
 
@@ -228,16 +234,21 @@ export async function requestPasskeyAssertionChallenge({
   emailSession,
   purpose = 'reauth',
   deviceBindingId,
+  partnerOrigin,
   endpoint = '/api/auth/passkey/assert/challenge',
 }: {
   emailSession: string;
   purpose?: PasskeyAssertionPurpose;
   deviceBindingId?: string;
+  partnerOrigin?: PasskeyPartnerOriginOptions;
   endpoint?: string;
 }): Promise<PasskeyAssertionChallengeResult> {
   return postJson<PasskeyAssertionChallengeResult>(endpoint, {
     purpose,
     ...(deviceBindingId ? { deviceBindingId } : {}),
+    ...(partnerOrigin?.origin ? { origin: partnerOrigin.origin } : {}),
+    ...(partnerOrigin?.rpId ? { rpId: partnerOrigin.rpId } : {}),
+    ...(partnerOrigin?.clientKey ? { clientKey: partnerOrigin.clientKey } : {}),
   }, authHeader(emailSession));
 }
 
