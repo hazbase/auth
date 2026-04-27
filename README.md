@@ -312,6 +312,47 @@ const sponsored = await sponsorUserOp({
 });
 ```
 
+### 5) Pay an x402 resource as a buyer
+```ts
+import {
+  buildX402PaymentHeader,
+  decodeXPaymentResponseHeader,
+  getX402PaymentRequestId,
+  parseX402ResponseBody,
+  payX402WithHazbaseWallet,
+  selectX402PaymentRequirement,
+} from '@hazbase/auth';
+
+const first = await fetch('https://seller.example/reports/001', {
+  headers: { accept: 'application/x-x402+json, application/json' },
+});
+if (first.status !== 402) throw new Error('resource did not request x402 payment');
+
+const x402 = parseX402ResponseBody(await first.text());
+const requirement = selectX402PaymentRequirement(x402);
+
+// EOA buyer: sign EIP-3009 transferWithAuthorization locally.
+const payment = await buildX402PaymentHeader({
+  requirement,
+  privateKey: process.env.BUYER_PK!,
+});
+
+const paid = await fetch(requirement.resource, {
+  headers: { 'x-payment': payment.header },
+});
+console.log(decodeXPaymentResponseHeader(paid.headers.get('x-payment-response')));
+
+// hazBase Smart Wallet buyer: use a fresh purpose=reauth highTrustToken.
+const walletPayment = await payX402WithHazbaseWallet({
+  emailSession: session.accessToken,
+  paymentRequestId: getX402PaymentRequestId(x402, requirement),
+  deviceBindingId: 'devb_demo',
+  highTrustToken: assertion.highTrustToken!,
+  smartAccountAddress: account.smartAccountAddress,
+  waitForReceipt: true,
+});
+```
+
 ---
 
 ## Helper names
@@ -327,6 +368,15 @@ const sponsored = await sponsorUserOp({
 - `authorizeOwnerUserOp`
 - `sponsorUserOp`
 - `signInWithWallet`
+- `listSupportedPayments`
+- `buildX402Requirements`
+- `verifyX402Payment`
+- `settleX402Payment`
+- `parseX402ResponseBody`
+- `selectX402PaymentRequirement`
+- `buildX402PaymentHeader`
+- `decodeXPaymentResponseHeader`
+- `payX402WithHazbaseWallet`
 
 ---
 

@@ -487,6 +487,10 @@ export interface X402ResponseBody {
   x402Version: number;
   accepts: X402Requirement[];
   error: string;
+  paymentRequestId?: string;
+  hazbase?: {
+    paymentRequestId?: string;
+  };
 }
 
 export interface X402RequirementsRequest {
@@ -521,6 +525,8 @@ export interface X402VerifyRequest {
 
 export interface X402VerifyResult {
   paymentRequestId: string;
+  paymentAttemptId?: string;
+  xPaymentHash?: string;
   verified: boolean;
   invalidReason?: string;
   errorCode?: string;
@@ -541,9 +547,74 @@ export interface X402SettleRequest {
 
 export interface X402SettleResult {
   paymentRequestId: string;
+  paymentAttemptId?: string;
+  xPaymentHash?: string;
   settled: boolean;
   errorCode?: string;
   transactionHash?: string | null;
   facilitator?: Record<string, unknown>;
+  status?: string;
+}
+
+export interface X402PaymentAuthorization {
+  from: string;
+  to: string;
+  value: string;
+  validAfter: string;
+  validBefore: string;
+  nonce: string;
+}
+
+export interface X402PaymentPayload {
+  x402Version: number;
+  scheme: string;
+  network: string;
+  payload: {
+    signature: string;
+    authorization: X402PaymentAuthorization;
+  };
+}
+
+export interface BuildX402PaymentHeaderRequest {
+  requirement: X402Requirement;
+  privateKey: string;
+  nonce?: string;
+  validAfter?: string | number;
+  validBefore?: string | number;
+  now?: number;
+}
+
+export interface BuildX402PaymentHeaderResult {
+  header: string;
+  payer: string;
+  payload: X402PaymentPayload;
+}
+
+export interface X402HazbaseWalletPayRequest {
+  emailSession: string;
+  paymentRequestId: string;
+  deviceBindingId: string;
+  highTrustToken: string;
+  smartAccountAddress?: string;
+  accountSalt?: string;
+  waitForReceipt?: boolean;
+}
+
+export interface X402HazbaseWalletPayResult {
+  paymentRequestId: string;
+  paymentAttemptId?: string;
+  xPaymentHash?: string;
+  paid: boolean;
+  verified?: boolean;
+  settled?: boolean;
+  payer?: string;
+  chainId?: number;
+  network?: string;
+  relayMode?: string;
+  submittedUserOpHash?: string | null;
+  transactionHash?: string | null;
+  gasEstimate?: Record<string, unknown>;
+  xPayment: string;
+  receipt?: Record<string, unknown> | null;
   status?: string;
 }
