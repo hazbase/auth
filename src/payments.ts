@@ -82,6 +82,18 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
     usdcName: 'USDC',
     usdcVersion: '2',
   },
+  polygon: {
+    chainId: 137,
+    label: 'Polygon',
+    usdcName: 'USD Coin',
+    usdcVersion: '2',
+  },
+  'polygon-amoy': {
+    chainId: 80002,
+    label: 'Polygon Amoy',
+    usdcName: 'USDC',
+    usdcVersion: '2',
+  },
 } as const;
 
 type SupportedX402BuyerNetwork = keyof typeof SUPPORTED_X402_BUYER_NETWORKS;

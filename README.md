@@ -313,6 +313,8 @@ const sponsored = await sponsorUserOp({
 ```
 
 ### 5) Pay an x402 resource as a buyer
+Supported buyer networks are `base`, `base-sepolia`, `polygon`, and `polygon-amoy` for USDC EIP-3009 payments.
+
 ```ts
 import {
   buildX402PaymentHeader,
