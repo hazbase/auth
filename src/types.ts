@@ -436,15 +436,32 @@ export interface SponsorUserOpResult {
 export interface PaymentNetworkSummary {
   network: string;
   name: string;
-  chainId: number;
+  chainId: number | null;
   kind: 'testnet' | 'mainnet';
+  family?: 'evm' | 'liquid';
+  scheme?: string;
+  enabled?: boolean;
   asset: string;
   assetAddress: string;
+  assetId?: string;
   decimals: number;
   eip712?: {
     name: string;
     version: string;
-  };
+  } | null;
+  assets?: Array<{
+    asset: string;
+    symbol: string;
+    name: string;
+    assetAddress: string;
+    assetId?: string;
+    decimals: number;
+    settlementMode?: string;
+    eip712?: {
+      name: string;
+      version: string;
+    } | null;
+  }>;
   hazbaseWalletPayoutAvailable?: boolean;
   capabilities?: {
     owner: boolean;
@@ -569,6 +586,8 @@ export interface X402PaymentPayload {
   x402Version: number;
   scheme: string;
   network: string;
+  asset?: string;
+  paymentRequestId?: string;
   payload: {
     signature: string;
     authorization: X402PaymentAuthorization;

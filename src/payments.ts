@@ -73,24 +73,32 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
   base: {
     chainId: 8453,
     label: 'Base',
+    eip712Name: 'USD Coin',
+    eip712Version: '2',
     usdcName: 'USD Coin',
     usdcVersion: '2',
   },
   'base-sepolia': {
     chainId: 84532,
     label: 'Base Sepolia',
+    eip712Name: 'USDC',
+    eip712Version: '2',
     usdcName: 'USDC',
     usdcVersion: '2',
   },
   polygon: {
     chainId: 137,
     label: 'Polygon',
+    eip712Name: 'USD Coin',
+    eip712Version: '2',
     usdcName: 'USD Coin',
     usdcVersion: '2',
   },
   'polygon-amoy': {
     chainId: 80002,
     label: 'Polygon Amoy',
+    eip712Name: 'USDC',
+    eip712Version: '2',
     usdcName: 'USDC',
     usdcVersion: '2',
   },
@@ -242,8 +250,8 @@ export async function buildX402PaymentHeader({
     nonce: nonce || hexlify(randomBytes(32)),
   };
   const domain = {
-    name: String(requirement.extra?.name || network.usdcName),
-    version: String(requirement.extra?.version || network.usdcVersion),
+    name: String(requirement.extra?.name || network.eip712Name),
+    version: String(requirement.extra?.version || network.eip712Version),
     chainId: network.chainId,
     verifyingContract: getAddress(String(requirement.asset)),
   };
@@ -262,6 +270,8 @@ export async function buildX402PaymentHeader({
     x402Version: X402_VERSION,
     scheme: String(requirement.scheme || 'exact'),
     network: networkKey,
+    asset: getAddress(String(requirement.asset)),
+    paymentRequestId: String(requirement.extra?.paymentRequestId ?? '') || undefined,
     payload: {
       signature,
       authorization,
