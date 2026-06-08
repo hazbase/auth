@@ -601,6 +601,15 @@ export interface BuildX402PaymentHeaderRequest {
   validAfter?: string | number;
   validBefore?: string | number;
   now?: number;
+  /**
+   * Caller-supplied spend cap (atomic units). If the server-quoted
+   * `requirement.maxAmountRequired` exceeds this, signing is rejected.
+   */
+  maxValue?: string | number | bigint;
+  /** Require the server's payTo recipient to match this address, else reject. */
+  expectedPayTo?: string;
+  /** Require the server's asset token to match this address, else reject. */
+  expectedAsset?: string;
 }
 
 export interface BuildX402PaymentHeaderResult {

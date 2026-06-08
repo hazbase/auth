@@ -44,10 +44,17 @@ async function readData<T>(res: Response): Promise<T> {
   return (json?.data ?? json) as T;
 }
 
+let reqIdCounter = 0;
 function createRequestId(): string {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  if (uuid) return `req_${uuid}`;
-  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return `req_${c.randomUUID()}`;
+  if (c?.getRandomValues) {
+    const bytes = c.getRandomValues(new Uint8Array(16));
+    return `req_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  }
+  // No CSPRNG available: time + monotonic counter (NOT secret — this is only an
+  // x-request-id correlation header, never used as a security token).
+  return `req_${Date.now().toString(36)}_${(reqIdCounter++).toString(36)}`;
 }
 
 async function postJson<T>(path: string, body: Record<string, unknown>, headers: Record<string, string> = {}): Promise<T> {

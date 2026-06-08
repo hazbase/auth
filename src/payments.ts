@@ -22,10 +22,17 @@ async function readData<T>(res: Response): Promise<T> {
   return (json?.data ?? json) as T;
 }
 
+let reqIdCounter = 0;
 function createRequestId(): string {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  if (uuid) return `req_${uuid}`;
-  return `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+  const c = globalThis.crypto;
+  if (c?.randomUUID) return `req_${c.randomUUID()}`;
+  if (c?.getRandomValues) {
+    const bytes = c.getRandomValues(new Uint8Array(16));
+    return `req_${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  }
+  // No CSPRNG available: time + monotonic counter (NOT secret — this is only an
+  // x-request-id correlation header, never used as a security token).
+  return `req_${Date.now().toString(36)}_${(reqIdCounter++).toString(36)}`;
 }
 
 function authHeader(emailSession?: string): Record<string, string> {
@@ -69,6 +76,11 @@ async function getJson<T>(path: string, headers: Record<string, string> = {}): P
 const ETH_ADDR_REGEX = /^0x[0-9a-fA-F]{40}$/;
 const X402_VERSION = 1;
 
+// Trusted, per-network metadata. The EIP-712 domain (name/version/verifyingContract)
+// used for signing MUST be derived from this table, never from the untrusted 402
+// server response, otherwise a malicious server can induce domain confusion or a
+// transfer authorization for an arbitrary token. `usdcAddress` is the canonical
+// Circle-issued USDC contract (verified against developers.circle.com).
 export const SUPPORTED_X402_BUYER_NETWORKS = {
   base: {
     chainId: 8453,
@@ -77,6 +89,7 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
     eip712Version: '2',
     usdcName: 'USD Coin',
     usdcVersion: '2',
+    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   },
   'base-sepolia': {
     chainId: 84532,
@@ -85,6 +98,7 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
     eip712Version: '2',
     usdcName: 'USDC',
     usdcVersion: '2',
+    usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
   },
   polygon: {
     chainId: 137,
@@ -93,6 +107,7 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
     eip712Version: '2',
     usdcName: 'USD Coin',
     usdcVersion: '2',
+    usdcAddress: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
   },
   'polygon-amoy': {
     chainId: 80002,
@@ -101,6 +116,7 @@ export const SUPPORTED_X402_BUYER_NETWORKS = {
     eip712Version: '2',
     usdcName: 'USDC',
     usdcVersion: '2',
+    usdcAddress: '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582',
   },
 } as const;
 
@@ -233,27 +249,62 @@ export async function buildX402PaymentHeader({
   validAfter,
   validBefore,
   now = Math.floor(Date.now() / 1000),
+  maxValue,
+  expectedPayTo,
+  expectedAsset,
 }: BuildX402PaymentHeaderRequest): Promise<BuildX402PaymentHeaderResult> {
   assertX402Requirement(requirement);
   const networkKey = String(requirement.network);
   const network = supportedBuyerNetwork(networkKey);
   if (!network) throw new Error(`Unsupported buyer network: ${networkKey}`);
 
+  // The 402 requirement comes from an untrusted resource server. Before signing a
+  // fund-moving ERC-3009 authorization, pin everything that controls WHAT is signed
+  // to trusted, caller-controlled values — never to server-supplied fields.
+
+  // 1) Token must be the canonical USDC for this network (this SDK is USDC-only).
+  //    This both fixes EIP-712 domain confusion and prevents authorizing an
+  //    attacker-named token contract.
+  const canonicalAsset = getAddress(network.usdcAddress);
+  const requestedAsset = getAddress(String(requirement.asset));
+  if (requestedAsset !== canonicalAsset) {
+    throw new Error(
+      `x402 asset ${requestedAsset} is not the canonical token (${canonicalAsset}) for network "${networkKey}"`,
+    );
+  }
+
+  // 2) Optional caller-supplied expectations (defense against a compromised server).
+  if (expectedAsset && getAddress(String(expectedAsset)) !== requestedAsset) {
+    throw new Error(`x402 asset ${requestedAsset} does not match expectedAsset`);
+  }
+  const payTo = getAddress(String(requirement.payTo));
+  if (expectedPayTo && getAddress(String(expectedPayTo)) !== payTo) {
+    throw new Error(`x402 payTo ${payTo} does not match expectedPayTo`);
+  }
+
+  // 3) Enforce a caller-supplied spend cap on the (server-quoted) amount.
+  const value = BigInt(String(requirement.maxAmountRequired));
+  if (maxValue != null && value > BigInt(String(maxValue))) {
+    throw new Error(`x402 amount ${value} exceeds the caller-specified maxValue ${String(maxValue)}`);
+  }
+
   const wallet = new Wallet(privateKey.startsWith('0x') ? privateKey : `0x${privateKey}`);
   const maxTimeout = Number(requirement.maxTimeoutSeconds || 60);
   const authorization = {
     from: wallet.address,
-    to: getAddress(String(requirement.payTo)),
-    value: String(requirement.maxAmountRequired),
+    to: payTo,
+    value: value.toString(),
     validAfter: String(validAfter ?? Math.max(0, now - 30)),
     validBefore: String(validBefore ?? now + Math.max(30, Math.min(300, Number.isFinite(maxTimeout) ? maxTimeout : 60))),
     nonce: nonce || hexlify(randomBytes(32)),
   };
+  // EIP-712 domain is derived ENTIRELY from the trusted network table; server-supplied
+  // requirement.extra.name/version are intentionally ignored to prevent domain confusion.
   const domain = {
-    name: String(requirement.extra?.name || network.eip712Name),
-    version: String(requirement.extra?.version || network.eip712Version),
+    name: network.eip712Name,
+    version: network.eip712Version,
     chainId: network.chainId,
-    verifyingContract: getAddress(String(requirement.asset)),
+    verifyingContract: canonicalAsset,
   };
   const types = {
     TransferWithAuthorization: [
@@ -270,7 +321,7 @@ export async function buildX402PaymentHeader({
     x402Version: X402_VERSION,
     scheme: String(requirement.scheme || 'exact'),
     network: networkKey,
-    asset: getAddress(String(requirement.asset)),
+    asset: canonicalAsset,
     paymentRequestId: String(requirement.extra?.paymentRequestId ?? '') || undefined,
     payload: {
       signature,
