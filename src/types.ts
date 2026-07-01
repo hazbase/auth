@@ -433,6 +433,186 @@ export interface SponsorUserOpResult {
   signingMode?: SessionSigningMode;
   status?: string;
 }
+
+export type WalletTokenStandard = 'erc20' | 'flexible-token' | string;
+
+export interface WalletTokenSummary {
+  tokenId?: string;
+  chainId: number;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  standard: WalletTokenStandard;
+  transferable: boolean;
+  whitelistRequired: boolean;
+  voucherRedeemEnabled: boolean;
+  blockExplorerUrl?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ListTokensRequest {
+  chainId?: number;
+}
+
+export interface ListTokensResult {
+  chainId: number;
+  tokens: WalletTokenSummary[];
+  status?: string;
+}
+
+export interface GetTokenInfoRequest {
+  chainId?: number;
+  token: string;
+}
+
+export interface GetTokenInfoResult {
+  chainId: number;
+  token: WalletTokenSummary;
+  status?: string;
+}
+
+export interface GetBalanceRequest extends GetTokenInfoRequest {
+  account: string;
+}
+
+export interface WalletTokenBalance {
+  raw: string;
+  formatted: string;
+  decimals: number;
+  symbol: string;
+}
+
+export interface GetBalanceResult {
+  chainId: number;
+  account: string;
+  token: WalletTokenSummary;
+  balance: WalletTokenBalance;
+  status?: string;
+}
+
+export interface GetActivityRequest extends GetBalanceRequest {
+  limit?: number;
+  cursor?: string;
+  fromBlock?: number;
+  toBlock?: number;
+}
+
+export type WalletActivityDirection = 'in' | 'out' | 'self' | string;
+
+export interface WalletActivityEntry {
+  id: string;
+  direction: WalletActivityDirection;
+  chainId: number;
+  account: string;
+  tokenAddress: string;
+  from: string;
+  to: string;
+  counterparty: string;
+  amount: WalletTokenBalance;
+  transactionHash: string;
+  blockNumber: number;
+  blockHash: string;
+  logIndex: number;
+  transactionIndex: number;
+  at?: string | null;
+  status?: string;
+}
+
+export interface GetActivityResult {
+  chainId: number;
+  account: string;
+  token: WalletTokenSummary;
+  activities: WalletActivityEntry[];
+  nextCursor?: string | null;
+  range?: {
+    fromBlock: number;
+    toBlock: number;
+    latestBlock: number;
+  };
+  status?: string;
+}
+
+export interface PrepareTransferRequest extends GetBalanceRequest {
+  recipient: string;
+  amount: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PreparedTransferExecution {
+  target: string;
+  value: string;
+  data: string;
+  method: string;
+  selector: string;
+}
+
+export interface PreparedTransferPolicy {
+  authorization: 'owner-reauth' | 'session' | string;
+  sessionEligible: boolean;
+  sponsored: boolean;
+}
+
+export interface PreparedTransferDisplay {
+  title: string;
+  subtitle: string;
+  from: string;
+  to: string;
+  assetSymbol: string;
+  assetName: string;
+}
+
+export interface PrepareTransferResult {
+  chainId: number;
+  account: string;
+  recipient: string;
+  token: WalletTokenSummary;
+  amount: {
+    input: string;
+    raw: string;
+    formatted: string;
+    decimals: number;
+    symbol: string;
+  };
+  execution: PreparedTransferExecution;
+  policy: PreparedTransferPolicy;
+  display: PreparedTransferDisplay;
+  metadata?: Record<string, unknown>;
+  status?: string;
+}
+
+export interface SubmitTransferRequest extends PrepareTransferRequest {
+  emailSession: string;
+  deviceBindingId: string;
+  highTrustToken: string;
+  accountSalt?: string;
+  paymasterValiditySec?: string;
+  waitForReceipt?: boolean;
+}
+
+export interface SubmitTransferResult {
+  chainId: number;
+  token: WalletTokenSummary;
+  transfer: {
+    account: string;
+    recipient: string;
+    amount: PrepareTransferResult['amount'];
+    execution: PreparedTransferExecution;
+  };
+  relayMode?: string;
+  bundlerRpcUrl?: string;
+  entryPointAddress?: string;
+  smartAccountAddress: string;
+  nonce: string;
+  initCode: string;
+  localUserOpHash: string;
+  submittedUserOpHash: string;
+  transactionHash?: string | null;
+  gasEstimate?: Record<string, unknown>;
+  receipt?: Record<string, unknown> | null;
+  metadata?: Record<string, unknown>;
+  status?: string;
+}
 export interface PaymentNetworkSummary {
   network: string;
   name: string;

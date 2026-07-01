@@ -13,8 +13,16 @@ import type {
   ExecuteEmbeddedSessionRequest,
   ExecuteEmbeddedSessionResult,
   GrantEmbeddedSessionRequest,
+  GetActivityRequest,
+  GetActivityResult,
+  GetBalanceRequest,
+  GetBalanceResult,
+  GetTokenInfoRequest,
+  GetTokenInfoResult,
   ListEmbeddedSessionsRequest,
   ListEmbeddedSessionsResult,
+  ListTokensRequest,
+  ListTokensResult,
   ListPasskeyDevicesRequest,
   ListPasskeyDevicesResult,
   SupportedChainsResult,
@@ -25,6 +33,8 @@ import type {
   PasskeyAssertionChallengeResult,
   PasskeyAssertionPurpose,
   PasskeyAccountDescriptorResult,
+  PrepareTransferRequest,
+  PrepareTransferResult,
   PasskeyRegistrationChallengeResult,
   PasskeyPartnerOriginOptions,
   RevokeEmbeddedSessionRequest,
@@ -35,6 +45,8 @@ import type {
   SponsorUserOpRequest,
   SponsorUserOpResult,
   StartEmbeddedSessionRequest,
+  SubmitTransferRequest,
+  SubmitTransferResult,
 } from './types';
 import type { ethers } from 'ethers';
 import { ensureClientKeyActive, createRequestTransaction } from './config';
@@ -128,6 +140,108 @@ export async function listSupportedChains({
   endpoint?: string;
 } = {}): Promise<SupportedChainsResult> {
   return getJson<SupportedChainsResult>(endpoint);
+}
+
+export async function listTokens({
+  chainId,
+  endpoint = '/api/wallet/tokens',
+}: ListTokensRequest & { endpoint?: string } = {}): Promise<ListTokensResult> {
+  const query = chainId != null ? `?chainId=${encodeURIComponent(String(chainId))}` : '';
+  return getJson<ListTokensResult>(`${endpoint}${query}`);
+}
+
+export async function getTokenInfo({
+  chainId,
+  token,
+  endpoint = '/api/wallet/token-info',
+}: GetTokenInfoRequest & { endpoint?: string }): Promise<GetTokenInfoResult> {
+  return postJson<GetTokenInfoResult>(endpoint, {
+    token,
+    ...(chainId != null ? { chainId } : {}),
+  });
+}
+
+export async function getBalance({
+  chainId,
+  token,
+  account,
+  endpoint = '/api/wallet/balance',
+}: GetBalanceRequest & { endpoint?: string }): Promise<GetBalanceResult> {
+  return postJson<GetBalanceResult>(endpoint, {
+    token,
+    account,
+    ...(chainId != null ? { chainId } : {}),
+  });
+}
+
+export async function getActivity({
+  chainId,
+  token,
+  account,
+  limit,
+  cursor,
+  fromBlock,
+  toBlock,
+  endpoint = '/api/wallet/activity',
+}: GetActivityRequest & { endpoint?: string }): Promise<GetActivityResult> {
+  return postJson<GetActivityResult>(endpoint, {
+    token,
+    account,
+    ...(chainId != null ? { chainId } : {}),
+    ...(limit != null ? { limit } : {}),
+    ...(cursor ? { cursor } : {}),
+    ...(fromBlock != null ? { fromBlock } : {}),
+    ...(toBlock != null ? { toBlock } : {}),
+  });
+}
+
+export async function prepareTransfer({
+  chainId,
+  token,
+  account,
+  recipient,
+  amount,
+  metadata,
+  endpoint = '/api/wallet/transfer/prepare',
+}: PrepareTransferRequest & { endpoint?: string }): Promise<PrepareTransferResult> {
+  return postJson<PrepareTransferResult>(endpoint, {
+    token,
+    account,
+    recipient,
+    amount,
+    ...(chainId != null ? { chainId } : {}),
+    ...(metadata ? { metadata } : {}),
+  });
+}
+
+export async function submitTransfer({
+  emailSession,
+  chainId,
+  token,
+  account,
+  recipient,
+  amount,
+  deviceBindingId,
+  highTrustToken,
+  accountSalt,
+  paymasterValiditySec,
+  waitForReceipt,
+  metadata,
+  endpoint = '/api/wallet/transfer/submit',
+}: SubmitTransferRequest & { endpoint?: string }): Promise<SubmitTransferResult> {
+  return postJson<SubmitTransferResult>(endpoint, {
+    token,
+    account,
+    recipient,
+    amount,
+    deviceBindingId,
+    highTrustToken,
+    ...(chainId != null ? { chainId } : {}),
+    ...(accountSalt ? { accountSalt } : {}),
+    ...(paymasterValiditySec != null ? { paymasterValiditySec } : {}),
+    ...(waitForReceipt != null ? { waitForReceipt } : {}),
+    ...(metadata ? { metadata } : {}),
+  }, authHeader(emailSession));
 }
 
 export async function signInWithWallet(
