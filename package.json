@@ -20,13 +20,18 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "require": "./dist/index.js",
-      "import": "./dist/index.mjs"
-    }
-  },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "require": "./dist/index.js",
+            "import": "./dist/index.mjs"
+        },
+        "./extension": {
+            "types": "./dist/extension.d.ts",
+            "require": "./dist/extension.js",
+            "import": "./dist/extension.mjs"
+        }
+    },
   "sideEffects": false,
   "dependencies": {
     "ethers": "^6.16.0"

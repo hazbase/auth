@@ -31,10 +31,12 @@ import type {
   OwnerUserOpAuthorizationRequest,
   OwnerUserOpAuthorizationResult,
   PasskeyAssertionChallengeResult,
+  PasskeyAssertionCredential,
   PasskeyAssertionPurpose,
   PasskeyAccountDescriptorResult,
   PrepareTransferRequest,
   PrepareTransferResult,
+  PasskeyRegistrationCredential,
   PasskeyRegistrationChallengeResult,
   PasskeyPartnerOriginOptions,
   RevokeEmbeddedSessionRequest,
@@ -51,9 +53,101 @@ import type {
 import type { ethers } from 'ethers';
 import { ensureClientKeyActive, createRequestTransaction } from './config';
 
+export type HazbaseApiErrorBody = {
+  message?: string | { message?: string; code?: string; errorCode?: string };
+  error?: string;
+  reason?: string;
+  code?: string;
+  errorCode?: string;
+};
+
+export class HazbaseApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly body?: HazbaseApiErrorBody;
+
+  constructor(message: string, status: number, code?: string, body?: HazbaseApiErrorBody) {
+    super(message);
+    this.name = 'HazbaseApiError';
+    this.status = status;
+    this.code = code;
+    this.body = body;
+  }
+}
+
+export type HazbasePasskeyErrorCode =
+  | 'passkey_cancelled'
+  | 'passkey_timeout'
+  | 'browser_no_passkey'
+  | 'https_required'
+  | 'passkey_unavailable';
+
+export class HazbasePasskeyError extends Error {
+  readonly code: HazbasePasskeyErrorCode;
+
+  constructor(code: HazbasePasskeyErrorCode, message?: string) {
+    super(message ?? code);
+    this.name = 'HazbasePasskeyError';
+    this.code = code;
+  }
+}
+
+export interface CurrentPasskeyPartnerOriginOptions {
+  clientKey: string;
+  location?: Pick<Location, 'origin' | 'protocol' | 'hostname'>;
+  secureContext?: boolean;
+  allowIpHostname?: boolean;
+}
+
+export interface PasskeyAvailabilityOptions {
+  location?: Pick<Location, 'protocol' | 'hostname'>;
+  secureContext?: boolean;
+  allowIpHostname?: boolean;
+}
+
+export interface RegisterPasskeyRequest {
+  emailSession: string;
+  deviceId?: string;
+  deviceLabel?: string;
+  partnerOrigin?: PasskeyPartnerOriginOptions;
+  metadata?: Record<string, unknown>;
+  challengeEndpoint?: string;
+  completeEndpoint?: string;
+}
+
+export interface AssertPasskeyRequest {
+  emailSession: string;
+  purpose?: PasskeyAssertionPurpose;
+  deviceBindingId?: string;
+  partnerOrigin?: PasskeyPartnerOriginOptions;
+  challengeEndpoint?: string;
+  completeEndpoint?: string;
+}
+
 async function readData<T>(res: Response): Promise<T> {
   const json = await res.json().catch(() => undefined);
   return (json?.data ?? json) as T;
+}
+
+async function readApiError(res: Response, path: string): Promise<HazbaseApiError> {
+  const text = await res.text().catch(() => '');
+  const parsed = text ? tryParseJson(text) : undefined;
+  const body = (parsed ?? {}) as HazbaseApiErrorBody;
+  const nested = typeof body.message === 'object' ? body.message : undefined;
+  const parsedMessage = typeof body.message === 'string'
+    ? body.message
+    : nested?.message ?? body.error ?? body.reason ?? text;
+  const message = parsedMessage || `${path} failed: ${res.statusText}`;
+  const code = body.code ?? body.errorCode ?? nested?.code ?? nested?.errorCode;
+  return new HazbaseApiError(message, res.status, code, parsed ? body : undefined);
+}
+
+function tryParseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
 }
 
 let reqIdCounter = 0;
@@ -82,8 +176,7 @@ async function postJson<T>(path: string, body: Record<string, unknown>, headers:
   });
 
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`${path} failed: ${err || res.statusText}`);
+    throw await readApiError(res, path);
   }
 
   return readData<T>(res);
@@ -96,8 +189,7 @@ async function getJson<T>(path: string, headers: Record<string, string> = {}): P
   });
 
   if (!res.ok) {
-    const err = await res.text().catch(() => '');
-    throw new Error(`${path} failed: ${err || res.statusText}`);
+    throw await readApiError(res, path);
   }
 
   return readData<T>(res);
@@ -389,6 +481,184 @@ export async function completePasskeyAssertion({
   }, authHeader(emailSession));
 }
 
+export async function registerPasskey({
+  emailSession,
+  deviceId,
+  deviceLabel,
+  partnerOrigin,
+  metadata,
+  challengeEndpoint,
+  completeEndpoint,
+}: RegisterPasskeyRequest): Promise<CompletePasskeyRegistrationResult> {
+  const challenge = await requestPasskeyRegistrationChallenge({
+    emailSession,
+    deviceId,
+    deviceLabel,
+    partnerOrigin,
+    ...(challengeEndpoint ? { endpoint: challengeEndpoint } : {}),
+  });
+  const credential = await createPasskeyRegistrationCredential(challenge);
+  return completePasskeyRegistration({
+    emailSession,
+    challengeId: challenge.challengeId,
+    credential,
+    ...(deviceId ? { deviceId } : {}),
+    ...(deviceLabel ? { deviceLabel } : {}),
+    ...(metadata ? { metadata } : {}),
+    ...(completeEndpoint ? { endpoint: completeEndpoint } : {}),
+  });
+}
+
+export async function assertPasskey({
+  emailSession,
+  purpose = 'reauth',
+  deviceBindingId,
+  partnerOrigin,
+  challengeEndpoint,
+  completeEndpoint,
+}: AssertPasskeyRequest): Promise<CompletePasskeyAssertionResult> {
+  const challenge = await requestPasskeyAssertionChallenge({
+    emailSession,
+    purpose,
+    ...(deviceBindingId ? { deviceBindingId } : {}),
+    partnerOrigin,
+    ...(challengeEndpoint ? { endpoint: challengeEndpoint } : {}),
+  });
+  const credential = await createPasskeyAssertionCredential(challenge);
+  return completePasskeyAssertion({
+    emailSession,
+    challengeId: challenge.challengeId,
+    purpose,
+    deviceBindingId: challenge.deviceBindingId ?? deviceBindingId,
+    credential,
+    ...(completeEndpoint ? { endpoint: completeEndpoint } : {}),
+  });
+}
+
+export function canUseDirectPartnerPasskey(options: PasskeyAvailabilityOptions = {}): boolean {
+  const currentLocation = options.location ?? safeLocation();
+  if (!currentLocation) return false;
+  const secureContext = options.secureContext ?? globalThis.isSecureContext;
+  if (!secureContext) return false;
+  if (currentLocation.protocol !== 'https:') return false;
+  if (!canUsePasskeyCredential()) return false;
+  if (!options.allowIpHostname && isIpHostname(currentLocation.hostname)) return false;
+  return true;
+}
+
+export function getCurrentPasskeyPartnerOrigin(options: CurrentPasskeyPartnerOriginOptions): PasskeyPartnerOriginOptions {
+  const currentLocation = options.location ?? safeLocation();
+  if (!currentLocation || !canUseDirectPartnerPasskey(options)) {
+    throw new HazbasePasskeyError('https_required', 'Direct passkey setup needs an HTTPS hostname.');
+  }
+  return {
+    origin: currentLocation.origin,
+    rpId: currentLocation.hostname,
+    clientKey: options.clientKey,
+  };
+}
+
+export function canUsePasskeyCredential(): boolean {
+  return typeof navigator !== 'undefined'
+    && Boolean(navigator.credentials)
+    && typeof globalThis.PublicKeyCredential !== 'undefined';
+}
+
+export async function createPasskeyRegistrationCredential(
+  challenge: PasskeyRegistrationChallengeResult,
+): Promise<PasskeyRegistrationCredential> {
+  assertBrowserPasskeyAvailable();
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      challenge: base64UrlToArrayBuffer(challenge.challenge),
+      rp: {
+        id: challenge.rpId,
+        name: challenge.rpName || 'hazBase',
+      },
+      user: {
+        id: base64UrlToArrayBuffer(challenge.userHandle),
+        name: challenge.userName,
+        displayName: challenge.userDisplayName || challenge.userName,
+      },
+      pubKeyCredParams: [
+        { type: 'public-key', alg: -7 },
+        { type: 'public-key', alg: -257 },
+      ],
+      authenticatorSelection: {
+        residentKey: 'preferred',
+        userVerification: 'required',
+      },
+      timeout: challenge.timeoutMs ?? 300_000,
+      excludeCredentials: (challenge.excludeCredentialIds ?? []).map((id) => ({
+        id: base64UrlToArrayBuffer(id),
+        type: 'public-key' as const,
+      })),
+      attestation: 'none',
+    },
+  }).catch((error: unknown) => {
+    throw toPasskeyError(error);
+  });
+
+  const publicKeyCredential = globalThis.PublicKeyCredential;
+  if (!publicKeyCredential || !(credential instanceof publicKeyCredential)) {
+    throw new HazbasePasskeyError('passkey_cancelled', 'Passkey registration was cancelled.');
+  }
+
+  const response = credential.response as AuthenticatorAttestationResponse;
+  const publicKey = response.getPublicKey?.();
+  const publicKeyAlgorithm = response.getPublicKeyAlgorithm?.();
+  const authenticatorData = response.getAuthenticatorData?.();
+  if (!publicKey || publicKeyAlgorithm == null || !authenticatorData) {
+    throw new HazbasePasskeyError('browser_no_passkey', 'This browser does not expose the WebAuthn registration details required.');
+  }
+
+  return {
+    username: challenge.userName,
+    credential: {
+      id: credential.id,
+      publicKey: bytesToBase64(new Uint8Array(publicKey)),
+      algorithm: publicKeyAlgorithm === -257 ? 'RS256' : 'ES256',
+    },
+    authenticatorData: bytesToBase64(new Uint8Array(authenticatorData)),
+    clientData: bytesToBase64(new Uint8Array(response.clientDataJSON)),
+    attestationData: bytesToBase64(new Uint8Array(response.attestationObject)),
+  };
+}
+
+export async function createPasskeyAssertionCredential(
+  challenge: PasskeyAssertionChallengeResult,
+): Promise<PasskeyAssertionCredential> {
+  assertBrowserPasskeyAvailable();
+  const credential = await navigator.credentials.get({
+    publicKey: {
+      challenge: base64UrlToArrayBuffer(challenge.challenge),
+      rpId: challenge.rpId,
+      timeout: challenge.timeoutMs ?? 300_000,
+      userVerification: 'required',
+      allowCredentials: (challenge.credentialIds ?? []).map((id) => ({
+        id: base64UrlToArrayBuffer(id),
+        type: 'public-key' as const,
+      })),
+    },
+  }).catch((error: unknown) => {
+    throw toPasskeyError(error);
+  });
+
+  const publicKeyCredential = globalThis.PublicKeyCredential;
+  if (!publicKeyCredential || !(credential instanceof publicKeyCredential)) {
+    throw new HazbasePasskeyError('passkey_cancelled', 'Passkey check was cancelled.');
+  }
+
+  const response = credential.response as AuthenticatorAssertionResponse;
+  return {
+    credentialId: credential.id,
+    authenticatorData: bytesToBase64(new Uint8Array(response.authenticatorData)),
+    clientData: bytesToBase64(new Uint8Array(response.clientDataJSON)),
+    signature: bytesToBase64(new Uint8Array(response.signature)),
+    ...(response.userHandle ? { userHandle: bytesToBase64(new Uint8Array(response.userHandle)) } : {}),
+  };
+}
+
 export async function requestPasskeyAccountDescriptor({
   emailSession,
   deviceBindingId,
@@ -606,4 +876,42 @@ export async function sponsorUserOp({
     ...(signingMode ? { signingMode } : {}),
     ...(metadata ? { metadata } : {}),
   }, authHeader(emailSession));
+}
+
+function safeLocation(): Pick<Location, 'origin' | 'protocol' | 'hostname'> | null {
+  return typeof location === 'undefined' ? null : location;
+}
+
+function isIpHostname(hostname: string): boolean {
+  return /^\d+\.\d+\.\d+\.\d+$/u.test(hostname) || hostname.includes(':');
+}
+
+function toPasskeyError(error: unknown): unknown {
+  if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
+    if (error.name === 'NotAllowedError') return new HazbasePasskeyError('passkey_cancelled', error.message);
+    if (error.name === 'AbortError' || error.name === 'TimeoutError') return new HazbasePasskeyError('passkey_timeout', error.message);
+    if (error.name === 'NotSupportedError' || error.name === 'SecurityError') return new HazbasePasskeyError('passkey_unavailable', error.message);
+  }
+  return error;
+}
+
+function assertBrowserPasskeyAvailable(): void {
+  if (!canUsePasskeyCredential()) {
+    throw new HazbasePasskeyError('passkey_unavailable', 'Passkeys are not available in this browser.');
+  }
+}
+
+function base64UrlToArrayBuffer(value: string): ArrayBuffer {
+  const normalized = value.replace(/-/gu, '+').replace(/_/gu, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
 }

@@ -7,6 +7,7 @@
 It wraps the backend APIs used by first-party or allowlisted partner apps so web clients can move through **email OTP -> passkey binding -> account bootstrap -> owner authorization -> sponsored user operation** with a consistent TypeScript interface.
 
 - Scope: email OTP sessions, passkey registration/assertion, account descriptor/bootstrap, owner userOp authorization, sponsor signing
+- Extension helpers: passkey bridge controller and runtime request helper for wallet extensions
 - Design: **ESM-first**, browser/backend friendly fetch wrappers, minimal runtime assumptions
 - Goal: Let apps integrate hazBase auth and smart-wallet flows **without rewriting request/response plumbing**
 
@@ -76,6 +77,44 @@ Important model assumptions:
 Deployment portability notes:
 - `@hazbase/auth` stays backend-contract based. It does not expose cloud-specific SDK modes.
 - The same client code should work with any hazBase-compatible backend as long as the backend API contract stays the same.
+- The default API endpoint is `https://api.hazbase.com`. Call `setApiEndpoint()` only for local, staging, or self-hosted APIs.
+
+---
+
+## Quick start: extension passkey bridge
+
+Wallet extensions can keep passkey ceremonies on the canonical hazBase origin
+while handling the popup/window lifecycle in the extension background script.
+
+```ts
+import { createPasskeyBridgeController } from '@hazbase/auth/extension';
+
+const passkeyBridge = createPasskeyBridgeController({
+  extensionId: chrome.runtime.id,
+  openBridgeWindow: async (url) => {
+    const created = await chrome.windows.create({ url, type: 'popup' });
+    return { windowId: created.id, tabId: created.tabs?.[0]?.id };
+  },
+});
+```
+
+The bridge uses `https://api.hazbase.com` by default. Pass
+`fallbackApiEndpoint` only for local, staging, or self-hosted APIs.
+
+The UI surface can request the bridge through the extension runtime:
+
+```ts
+import { requestExtensionPasskeyBridge } from '@hazbase/auth/extension';
+
+const assertion = await requestExtensionPasskeyBridge({
+  mode: 'assertion',
+  emailSession,
+  purpose: 'reauth',
+  deviceBindingId,
+}, {
+  messageType: 'example:passkeyBridge',
+});
+```
 
 ---
 
@@ -84,14 +123,13 @@ Deployment portability notes:
 **`scripts/passkey-account.ts`**
 ```ts
 import {
+  assertPasskey,
   authorizeOwnerUserOp,
   bootstrapPasskeyAccount,
-  completePasskeyAssertion,
-  completePasskeyRegistration,
+  getCurrentPasskeyPartnerOrigin,
   requestEmailOtp,
   requestPasskeyAccountDescriptor,
-  requestPasskeyAssertionChallenge,
-  requestPasskeyRegistrationChallenge,
+  registerPasskey,
   sponsorUserOp,
   startEmbeddedSession,
   verifyEmailOtp,
@@ -111,30 +149,21 @@ async function main() {
     purpose: 'smart_wallet_sign_in',
   });
 
-  const registerChallenge = await requestPasskeyRegistrationChallenge({
-    emailSession: session.accessToken,
-    deviceLabel: 'Chrome on MacBook',
+  const partnerOrigin = getCurrentPasskeyPartnerOrigin({
+    clientKey: 'partner_client_key',
   });
 
-  const device = await completePasskeyRegistration({
+  const device = await registerPasskey({
     emailSession: session.accessToken,
-    challengeId: registerChallenge.challengeId,
-    credential: registrationCredential,
     deviceLabel: 'Chrome on MacBook',
+    partnerOrigin,
   });
 
-  const bootstrapChallenge = await requestPasskeyAssertionChallenge({
+  const bootstrapAssertion = await assertPasskey({
     emailSession: session.accessToken,
     purpose: 'bootstrap',
     deviceBindingId: device.deviceBindingId,
-  });
-
-  const bootstrapAssertion = await completePasskeyAssertion({
-    emailSession: session.accessToken,
-    challengeId: bootstrapChallenge.challengeId,
-    credential: authenticationCredential,
-    purpose: 'bootstrap',
-    deviceBindingId: device.deviceBindingId,
+    partnerOrigin,
   });
 
   const descriptor = await requestPasskeyAccountDescriptor({
@@ -232,18 +261,11 @@ const session = await verifyEmailOtp({
 
 ### 2) Step up with passkey before bootstrap or owner approval
 ```ts
-const challenge = await requestPasskeyAssertionChallenge({
+const assertion = await assertPasskey({
   emailSession: session.accessToken,
   purpose: 'reauth',
   deviceBindingId: 'devb_demo',
-});
-
-const assertion = await completePasskeyAssertion({
-  emailSession: session.accessToken,
-  challengeId: challenge.challengeId,
-  credential: authenticationCredential,
-  purpose: 'reauth',
-  deviceBindingId: 'devb_demo',
+  partnerOrigin,
 });
 ```
 
@@ -360,6 +382,10 @@ const walletPayment = await payX402WithHazbaseWallet({
 ## Helper names
 - `requestEmailOtp`
 - `verifyEmailOtp`
+- `registerPasskey`
+- `assertPasskey`
+- `getCurrentPasskeyPartnerOrigin`
+- `canUseDirectPartnerPasskey`
 - `requestPasskeyRegistrationChallenge`
 - `completePasskeyRegistration`
 - `requestPasskeyAssertionChallenge`
