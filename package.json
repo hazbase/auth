@@ -1,6 +1,6 @@
 {
   "name": "@hazbase/auth",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "SDK helper for email OTP sessions, passkey-native account bootstrap, sponsor signing, wallet-signature authentication, and hazBase-integrated ZK proofs.",
   "author": "IndieSquare Inc <info@hazbase.com>",
   "keywords": [
@@ -20,18 +20,18 @@
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "require": "./dist/index.js",
-            "import": "./dist/index.mjs"
-        },
-        "./extension": {
-            "types": "./dist/extension.d.ts",
-            "require": "./dist/extension.js",
-            "import": "./dist/extension.mjs"
-        }
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
     },
+    "./extension": {
+      "types": "./dist/extension.d.ts",
+      "require": "./dist/extension.js",
+      "import": "./dist/extension.mjs"
+    }
+  },
   "sideEffects": false,
   "dependencies": {
     "ethers": "^6.16.0"
