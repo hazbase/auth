@@ -1,6 +1,6 @@
 {
   "name": "@hazbase/auth",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "SDK helper for email OTP sessions, passkey-native account bootstrap, sponsor signing, wallet-signature authentication, and hazBase-integrated ZK proofs.",
   "author": "IndieSquare Inc <info@hazbase.com>",
   "keywords": [
@@ -38,6 +38,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "test:step-up": "npm run build && node test-step-up.mjs",
     "prepublishOnly": "npm run build",
     "clean": "rimraf dist"
   },
