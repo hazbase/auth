@@ -62,6 +62,15 @@ export type RequestExtensionPasskeyBridgeOptions = {
   failedMessage?: string;
 };
 
+export type RequestPasskeyBridgePopupOptions = {
+  bridgeEndpoint?: string;
+  returnOrigin?: string;
+  timeoutMs?: number;
+  windowName?: string;
+  windowFeatures?: string;
+  openWindow?: (url: string, name: string, features: string) => Window | null;
+};
+
 export type PasskeyBridgeExternalMessageResult =
   | { handled: true; response: { ok: true } | { ok: false; reason: string } }
   | { handled: false; response?: undefined };
@@ -198,19 +207,101 @@ export function requestExtensionPasskeyBridge(
 
 export function createPasskeyBridgeUrl(input: PasskeyBridgeRunInput & {
   bridgeEndpoint: string;
-  extensionId: string;
+  extensionId?: string;
+  returnOrigin?: string;
   requestId: string;
 }): string {
   const fragment = new URLSearchParams({
     mode: input.mode,
     requestId: input.requestId,
-    extensionId: input.extensionId,
     accessToken: input.emailSession,
   });
+  if (input.extensionId) fragment.set('extensionId', input.extensionId);
+  if (input.returnOrigin) fragment.set('returnOrigin', input.returnOrigin);
   if (input.deviceLabel) fragment.set('deviceLabel', input.deviceLabel);
   if (input.purpose) fragment.set('purpose', input.purpose);
   if (input.deviceBindingId) fragment.set('deviceBindingId', input.deviceBindingId);
   return `${input.bridgeEndpoint}/auth/passkey/bridge#${fragment.toString()}`;
+}
+
+export function requestPasskeyBridgePopup(
+  input: PasskeyBridgeRunInput,
+  options: RequestPasskeyBridgePopupOptions = {},
+): Promise<PasskeyBridgeResult> {
+  if (typeof window === 'undefined' || typeof location === 'undefined') {
+    return Promise.resolve({ ok: false, mode: input.mode, reason: 'Passkey popup requires a browser.' });
+  }
+  if (!input.emailSession) {
+    return Promise.resolve({ ok: false, mode: input.mode, reason: 'Sign in first.' });
+  }
+  const bridgeEndpoint = normalizePasskeyBridgeEndpoint(input.apiEndpoint, options.bridgeEndpoint);
+  const returnOrigin = options.returnOrigin?.trim() || location.origin;
+  if (new URL(returnOrigin).origin !== returnOrigin.replace(/\/$/u, '')) {
+    return Promise.resolve({ ok: false, mode: input.mode, reason: 'returnOrigin must be an exact origin.' });
+  }
+  const requestId = createBridgeRequestId();
+  const url = createPasskeyBridgeUrl({
+    ...input,
+    bridgeEndpoint,
+    requestId,
+    returnOrigin,
+  });
+  const openWindow = options.openWindow ?? ((target, name, features) => window.open(target, name, features));
+  const popup = openWindow(
+    url,
+    options.windowName ?? 'hazbase-passkey',
+    options.windowFeatures ?? 'popup=yes,width=760,height=860,resizable=yes,scrollbars=yes',
+  );
+  if (!popup) {
+    return Promise.resolve({
+      ok: false,
+      mode: input.mode,
+      requestId,
+      reason: 'Passkey popup was blocked.',
+      code: 'popup_blocked',
+    });
+  }
+
+  return new Promise<PasskeyBridgeResult>((resolve) => {
+    let settled = false;
+    const expectedOrigin = new URL(bridgeEndpoint).origin;
+    const timeoutMs = options.timeoutMs ?? 180_000;
+    const cleanup = () => {
+      window.removeEventListener('message', onMessage);
+      clearTimeout(timer);
+      clearInterval(closedTimer);
+    };
+    const finish = (result: PasskeyBridgeResult) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (!popup.closed) popup.close();
+      resolve(result);
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin || event.source !== popup || !isRecord(event.data)) return;
+      if (event.data.type !== 'hazbaseAccount:passkeyBridgeResult' || event.data.requestId !== requestId) return;
+      finish(normalizePasskeyBridgeResult(event.data));
+    };
+    window.addEventListener('message', onMessage);
+    const timer = setTimeout(() => finish({
+      ok: false,
+      mode: input.mode,
+      requestId,
+      reason: 'Passkey approval timed out.',
+      code: 'passkey_timeout',
+    }), timeoutMs);
+    const closedTimer = setInterval(() => {
+      if (!popup.closed) return;
+      finish({
+        ok: false,
+        mode: input.mode,
+        requestId,
+        reason: 'Passkey approval was cancelled.',
+        code: 'passkey_cancelled',
+      });
+    }, 400);
+  });
 }
 
 export function normalizePasskeyBridgeEndpoint(value: unknown, fallback = API_ENDPOINT): string {

@@ -8,6 +8,9 @@ import type {
   CompletePasskeyRegistrationResult,
   EmailOtpRequestResult,
   EmailOtpSessionResult,
+  EmailSessionRefreshResult,
+  EmailStepUpHandoff,
+  EmailStepUpRequestResult,
   EmbeddedSessionGrantResult,
   EndEmbeddedSessionRequest,
   ExecuteEmbeddedSessionRequest,
@@ -46,6 +49,10 @@ import type {
   SignInResult,
   SponsorUserOpRequest,
   SponsorUserOpResult,
+  StepUpAssurance,
+  StepUpBrowserBinding,
+  StepUpResult,
+  StepUpVerificationResult,
   StartEmbeddedSessionRequest,
   SubmitTransferRequest,
   SubmitTransferResult,
@@ -401,6 +408,163 @@ export async function verifyEmailOtp({
     await auditIfEnabled({ functionId, status: 'failed', reason: (error as Error).message });
     throw error;
   }
+}
+
+export async function refreshEmailSession({
+  refreshToken,
+  endpoint = '/api/auth/email/refresh-session',
+}: {
+  refreshToken: string;
+  endpoint?: string;
+}): Promise<EmailSessionRefreshResult> {
+  return postJson<EmailSessionRefreshResult>(endpoint, { refreshToken });
+}
+
+export async function createStepUpBrowserBinding(): Promise<StepUpBrowserBinding> {
+  const cryptoApi = globalThis.crypto;
+  if (!cryptoApi?.getRandomValues || !cryptoApi.subtle) {
+    throw new Error('Secure browser cryptography is required for step-up authentication.');
+  }
+  const secretBytes = cryptoApi.getRandomValues(new Uint8Array(32));
+  const secret = bytesToBase64Url(secretBytes);
+  const digest = await cryptoApi.subtle.digest('SHA-256', new TextEncoder().encode(secret));
+  return { secret, hash: bytesToHex(new Uint8Array(digest)) };
+}
+
+export async function requestEmailStepUp({
+  emailSession,
+  purpose,
+  browserBindingHash,
+  origin,
+  returnUrl,
+  endpoint = '/api/auth/step-up/email/request',
+}: {
+  emailSession: string;
+  purpose: string;
+  browserBindingHash: string;
+  origin?: string;
+  returnUrl?: string;
+  endpoint?: string;
+}): Promise<EmailStepUpRequestResult> {
+  const resolvedOrigin = resolveStepUpOrigin(origin);
+  const resolvedReturnUrl = resolveStepUpReturnUrl(returnUrl, resolvedOrigin);
+  return postJson<EmailStepUpRequestResult>(endpoint, {
+    origin: resolvedOrigin,
+    purpose,
+    browserBindingHash,
+    returnUrl: resolvedReturnUrl,
+  }, { ...authHeader(emailSession), Origin: resolvedOrigin });
+}
+
+export async function completeEmailStepUp({
+  emailSession,
+  challengeId,
+  purpose,
+  browserBindingSecret,
+  token,
+  code,
+  origin,
+  endpoint = '/api/auth/step-up/email/complete',
+}: {
+  emailSession: string;
+  challengeId: string;
+  purpose: string;
+  browserBindingSecret: string;
+  token?: string;
+  code?: string;
+  origin?: string;
+  endpoint?: string;
+}): Promise<StepUpResult> {
+  const resolvedOrigin = resolveStepUpOrigin(origin);
+  return postJson<StepUpResult>(endpoint, {
+    challengeId,
+    origin: resolvedOrigin,
+    purpose,
+    browserBindingSecret,
+    ...(token ? { token } : {}),
+    ...(code ? { code } : {}),
+  }, { ...authHeader(emailSession), Origin: resolvedOrigin });
+}
+
+export async function completePasskeyStepUp({
+  emailSession,
+  purpose,
+  highTrustToken,
+  origin,
+  endpoint = '/api/auth/step-up/passkey/complete',
+}: {
+  emailSession: string;
+  purpose: string;
+  highTrustToken: string;
+  origin?: string;
+  endpoint?: string;
+}): Promise<StepUpResult> {
+  const resolvedOrigin = resolveStepUpOrigin(origin);
+  return postJson<StepUpResult>(endpoint, {
+    origin: resolvedOrigin,
+    purpose,
+    highTrustToken,
+  }, { ...authHeader(emailSession), Origin: resolvedOrigin });
+}
+
+export async function verifyStepUpAssurance({
+  emailSession,
+  assuranceToken,
+  purpose,
+  minimumAssurance = 'email_link',
+  origin,
+  endpoint = '/api/auth/step-up/verify',
+}: {
+  emailSession: string;
+  assuranceToken: string;
+  purpose: string;
+  minimumAssurance?: StepUpAssurance;
+  origin?: string;
+  endpoint?: string;
+}): Promise<StepUpVerificationResult> {
+  const resolvedOrigin = resolveStepUpOrigin(origin);
+  return postJson<StepUpVerificationResult>(endpoint, {
+    assuranceToken,
+    origin: resolvedOrigin,
+    purpose,
+    minimumAssurance,
+  }, { ...authHeader(emailSession), Origin: resolvedOrigin });
+}
+
+export function readEmailStepUpHandoff(fragment?: string): EmailStepUpHandoff | null {
+  const value = fragment ?? (typeof location === 'undefined' ? '' : location.hash);
+  const params = new URLSearchParams(value.replace(/^#/u, ''));
+  const encoded = params.get('hazbaseStepUp');
+  if (!encoded) return null;
+  try {
+    const parsed = JSON.parse(base64UrlToUtf8(encoded)) as Partial<EmailStepUpHandoff>;
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.challengeId !== 'string' || !parsed.challengeId ||
+      typeof parsed.token !== 'string' || !parsed.token ||
+      typeof parsed.origin !== 'string' || !parsed.origin ||
+      typeof parsed.purpose !== 'string' || !parsed.purpose
+    ) return null;
+    return parsed as EmailStepUpHandoff;
+  } catch {
+    return null;
+  }
+}
+
+export function consumeEmailStepUpHandoffFromLocation({
+  clear = true,
+}: {
+  clear?: boolean;
+} = {}): EmailStepUpHandoff | null {
+  if (typeof location === 'undefined') return null;
+  const handoff = readEmailStepUpHandoff(location.hash);
+  if (!handoff || !clear || typeof history === 'undefined') return handoff;
+  const url = new URL(location.href);
+  const params = new URLSearchParams(url.hash.replace(/^#/u, ''));
+  params.delete('hazbaseStepUp');
+  url.hash = params.toString();
+  history.replaceState(history.state, '', url.toString());
+  return handoff;
 }
 
 export async function requestPasskeyRegistrationChallenge({
@@ -880,6 +1044,37 @@ export async function sponsorUserOp({
 
 function safeLocation(): Pick<Location, 'origin' | 'protocol' | 'hostname'> | null {
   return typeof location === 'undefined' ? null : location;
+}
+
+function resolveStepUpOrigin(value?: string): string {
+  const input = value?.trim() || safeLocation()?.origin || '';
+  if (!input) throw new Error('origin is required outside a browser.');
+  const url = new URL(input);
+  if ((url.protocol !== 'https:' && url.protocol !== 'http:') || url.origin !== input.replace(/\/$/u, '')) {
+    throw new Error('origin must be an exact HTTP(S) origin.');
+  }
+  return url.origin;
+}
+
+function resolveStepUpReturnUrl(value: string | undefined, origin: string): string {
+  const input = value?.trim() || (typeof location === 'undefined' ? `${origin}/` : location.href);
+  const url = new URL(input, origin);
+  if (url.origin !== origin) throw new Error('returnUrl must use the step-up origin.');
+  url.hash = '';
+  return url.toString();
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  return bytesToBase64(bytes).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '');
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function base64UrlToUtf8(value: string): string {
+  const bytes = new Uint8Array(base64UrlToArrayBuffer(value));
+  return new TextDecoder().decode(bytes);
 }
 
 function isIpHostname(hostname: string): boolean {

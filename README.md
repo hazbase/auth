@@ -45,6 +45,10 @@ You are expected to provide a backend that exposes the current hazBase auth rout
 Default route family:
 - `/api/auth/email/request-otp`
 - `/api/auth/email/verify-otp`
+- `/api/auth/step-up/email/request`
+- `/api/auth/step-up/email/complete`
+- `/api/auth/step-up/passkey/complete`
+- `/api/auth/step-up/verify`
 - `/api/auth/passkey/register/challenge`
 - `/api/auth/passkey/register/complete`
 - `/api/auth/passkey/assert/challenge`
@@ -118,6 +122,57 @@ const assertion = await requestExtensionPasskeyBridge({
 
 ---
 
+## Quick start: purpose-bound step-up authentication
+
+Sensitive application actions can require a short-lived assurance token bound
+to the current app session, exact web origin, and action purpose. Prefer a
+passkey and offer the browser-bound email flow only where the product policy
+allows it.
+
+```ts
+import {
+  completePasskeyStepUp,
+  createStepUpBrowserBinding,
+  requestEmailStepUp,
+} from '@hazbase/auth';
+import { requestPasskeyBridgePopup } from '@hazbase/auth/extension';
+
+const bridge = await requestPasskeyBridgePopup({
+  mode: 'assertion',
+  emailSession,
+  purpose: 'reauth',
+});
+if (!bridge.ok || bridge.mode !== 'assertion' || !bridge.assertion.highTrustToken) {
+  throw new Error('Passkey confirmation failed');
+}
+
+const assurance = await completePasskeyStepUp({
+  emailSession,
+  purpose: 'example_sensitive_action',
+  highTrustToken: bridge.assertion.highTrustToken,
+});
+```
+
+For an email fallback, generate a new browser binding for each request and keep
+its `secret` only in the browser that started the flow. The emailed link or code
+cannot complete without that secret.
+
+```ts
+const binding = await createStepUpBrowserBinding();
+const challenge = await requestEmailStepUp({
+  emailSession,
+  purpose: 'example_sensitive_action',
+  browserBindingHash: binding.hash,
+  returnUrl: location.href.split('#')[0],
+});
+```
+
+The canonical passkey bridge only posts results to backend-allowlisted exact
+origins. Production backends must configure each application origin before the
+popup helper is used.
+
+---
+
 ## Quick start: email OTP -> passkey binding -> account bootstrap -> sponsor
 
 **`scripts/passkey-account.ts`**
@@ -128,6 +183,7 @@ import {
   bootstrapPasskeyAccount,
   getCurrentPasskeyPartnerOrigin,
   requestEmailOtp,
+  refreshEmailSession,
   requestPasskeyAccountDescriptor,
   registerPasskey,
   sponsorUserOp,
@@ -147,6 +203,12 @@ async function main() {
     email,
     code: '123456',
     purpose: 'smart_wallet_sign_in',
+  });
+
+  // Persist the refresh token securely and rotate the short-lived access token
+  // without asking the user to enter another OTP.
+  const renewedSession = await refreshEmailSession({
+    refreshToken: session.refreshToken!,
   });
 
   const partnerOrigin = getCurrentPasskeyPartnerOrigin({
@@ -382,6 +444,14 @@ const walletPayment = await payX402WithHazbaseWallet({
 ## Helper names
 - `requestEmailOtp`
 - `verifyEmailOtp`
+- `refreshEmailSession`
+- `createStepUpBrowserBinding`
+- `requestEmailStepUp`
+- `completeEmailStepUp`
+- `completePasskeyStepUp`
+- `verifyStepUpAssurance`
+- `readEmailStepUpHandoff`
+- `consumeEmailStepUpHandoffFromLocation`
 - `registerPasskey`
 - `assertPasskey`
 - `getCurrentPasskeyPartnerOrigin`

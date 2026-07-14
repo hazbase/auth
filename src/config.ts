@@ -24,7 +24,6 @@ export function setClientKey(key: string): void {
 
 /** Set api endpoint. */
 export function setApiEndpoint(uri?: string): void {
-  requireClientKey();
   g.__hazbase!.apiEndpoint = uri || API_ENDPOINT;
 }
 

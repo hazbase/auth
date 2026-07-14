@@ -60,6 +60,59 @@ export interface EmailOtpSessionResult {
   accounts?: EmailOtpAccountSummary[];
 }
 
+export interface EmailSessionRefreshResult {
+  email: string;
+  accessToken: string;
+  refreshToken: string;
+  sessionId: string;
+  userId: string;
+  status?: string;
+}
+
+export type StepUpAssurance = 'email_link' | 'passkey';
+
+export interface StepUpBrowserBinding {
+  secret: string;
+  hash: string;
+}
+
+export interface EmailStepUpHandoff {
+  version: 1;
+  challengeId: string;
+  token: string;
+  origin: string;
+  purpose: string;
+}
+
+export interface EmailStepUpRequestResult {
+  challengeId: string;
+  origin: string;
+  purpose: string;
+  expiresAt: string;
+  status?: string;
+  debugCode?: string;
+  debugLink?: string;
+}
+
+export interface StepUpResult {
+  assuranceToken: string;
+  assurance: StepUpAssurance;
+  purpose: string;
+  origin: string;
+  expiresAt: string;
+  status?: string;
+}
+
+export interface StepUpVerificationResult {
+  verified: boolean;
+  assuranceId: string;
+  assurance: StepUpAssurance;
+  purpose: string;
+  origin: string;
+  expiresAt: string;
+  status?: string;
+}
+
 export type PasskeyAssertionPurpose = 'bootstrap' | 'migration' | 'reauth' | 'session';
 export type PasskeyAlgorithm = 'ES256' | 'RS256';
 
